@@ -1,26 +1,34 @@
-const BaseModel = require('./BaseModel');
+const db = require('../config/db');
 
-class PaymentModel extends BaseModel {
-  constructor() {
-    super('payments');
-  }
+const PaymentModel = {
+  async getByInvoice(invoice_id) {
+    const { rows } = await db.query(
+      `SELECT * FROM payments WHERE invoice_id = $1 ORDER BY payment_date DESC`,
+      [invoice_id]
+    );
+    return rows;
+  },
 
-  async findByVisit(visitId) {
-    const { data, error } = await this.query()
-      .select('*')
-      .eq('visit_id', visitId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
+  async getTotalPaid(invoice_id) {
+    const { rows } = await db.query(
+      `SELECT COALESCE(SUM(amount_paid), 0) AS total FROM payments WHERE invoice_id = $1`,
+      [invoice_id]
+    );
+    return parseFloat(rows[0].total);
+  },
 
-  async totalForVisit(visitId) {
-    const { data, error } = await this.query()
-      .select('amount')
-      .eq('visit_id', visitId);
-    if (error) throw error;
-    return data.reduce((sum, p) => sum + Number(p.amount), 0);
-  }
-}
+  async create({ invoice_id, amount_paid, method, payment_date, notes }) {
+    const { rows } = await db.query(
+      `INSERT INTO payments (invoice_id, amount_paid, method, payment_date, notes)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [invoice_id, amount_paid, method, payment_date, notes]
+    );
+    return rows[0];
+  },
 
-module.exports = new PaymentModel();
+  async delete(id) {
+    await db.query('DELETE FROM payments WHERE id = $1', [id]);
+  },
+};
+
+module.exports = PaymentModel;

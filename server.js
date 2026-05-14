@@ -1,22 +1,45 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
+const cors = require('cors');
+const morgan = require('morgan');
+const helmet = require('helmet');
 
 app.use(express.json());
 
+// CORS configuration
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(morgan('dev'));
+app.use(helmet());
+
 // Routes
-const clientRoutes  = require('./routes/clientRouter');
-const visitRoutes   = require('./routes/visitRouter');
-const chargeRoutes  = require('./routes/chargeRouter');
-const paymentRoutes = require('./routes/paymentRouter');
-const expenseRoutes = require('./routes/expenseRouter');
+app.use('/api/auth',      require('./routes/authRoutes'));
+app.use('/api/clients',   require('./routes/clientRoutes'));
+app.use('/api/visits',    require('./routes/visitRoutes'));
+app.use('/api/expenses',  require('./routes/expenseRoutes'));
+app.use('/api/invoices',  require('./routes/invoiceRoutes'));
+app.use('/api/payments',  require('./routes/paymentRoutes'));
 
-app.use('/api/clients',  clientRoutes);
-app.use('/api/visits',   visitRoutes);
-app.use('/api/charges',  chargeRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/expenses', expenseRoutes);
+// Health check
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// const bcrypt = require('bcrypt');
+// const saltRounds = 10;
+// const password = 'Wamiatu25Collo.';
+// bcrypt.hash(password, saltRounds, function(err, hash) {
+//   if (err) {
+//     console.error('Error hashing password:', err);
+//   } else {
+//     console.log('Hashed password:', hash);
+//   }
+// });
 
-module.exports = app;
+// 404
+app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Kechei API running on port ${PORT}`));

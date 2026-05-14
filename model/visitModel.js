@@ -1,87 +1,60 @@
-const BaseModel = require('./BaseModel');
+const db = require('../config/db');
 
-class VisitModel extends BaseModel {
-  constructor() {
-    super('visits');
-  }
+const VisitModel = {
+  async getByClient(client_id) {
+    const { rows } = await db.query(
+      `SELECT * FROM visits WHERE client_id = $1 ORDER BY check_in DESC`,
+      [client_id]
+    );
+    return rows;
+  },
 
-  async findWithDetails(id) {
-    const { data, error } = await this.db
-      .from('visits')
-      .select(`
-        *,
-        clients (*),
-        charges (*),
-        payments (*)
-      `)
-      .eq('id', id)
-      .is('deleted_at', null)
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  async getById(id) {
+    const { rows } = await db.query(
+      'SELECT * FROM visits WHERE id = $1', [id]
+    );
+    return rows[0];
+  },
 
-  async findByClient(clientId) {
-    const { data, error } = await this.query()
-      .select('*, charges(*), payments(*)')
-      .eq('client_id', clientId)
-      .is('charges.deleted_at', null)
-      .is('payments.deleted_at', null)
-      .order('check_in_date', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
+async getActive() {
+  const { rows } = await db.query(
+    `SELECT v.*, c.full_name AS client_name, c.phone
+     FROM visits v
+     JOIN clients c ON c.id = v.client_id
+     ORDER BY v.created_at DESC`  
+  );
+  return rows;
+},
+  async create({ client_id, reason, notes }) {
+    const { rows } = await db.query(
+      `INSERT INTO visits (client_id, reason, notes, status, created_at)
+      VALUES ($1, $2, $3, 'active', NOW()) RETURNING *`,
+      [client_id, reason, notes || null]
+    );
+    return rows[0];
+  },
 
-  async findActive() {
-    const { data, error } = await this.query()
-      .select('*, clients(id, full_name, phone)')
-      .eq('status', 'active')
-      .order('check_in_date', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
+  async complete(id) {
+  const { rows } = await db.query(
+    `UPDATE visits SET status = 'completed', completed_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return rows[0];
+},
 
-  async updateStatus(id, status) {
-    return this.update(id, {
-      status,
-      ...(status === 'completed' ? { check_out_date: new Date().toISOString().split('T')[0] } : {}),
-    });
-  }
+  async update(id, { check_in, check_out, status }) {
+    const { rows } = await db.query(
+      `UPDATE visits SET check_in=$1, check_out=$2, status=$3
+       WHERE id=$4 RETURNING *`,
+      [check_in, check_out, status, id]
+    );
+    return rows[0];
+  },
 
-  // Total charged vs total paid for a visit
-  async getSummary(visitId) {
-    const { data, error } = await this.db
-      .from('visits')
-      .select(`
-        id,
-        status,
-        check_in_date,
-        check_out_date,
-        charges (amount, deleted_at),
-        payments (amount, deleted_at)
-      `)
-      .eq('id', visitId)
-      .single();
-    if (error) throw error;
+  async delete(id) {
+    await db.query('DELETE FROM visits WHERE id = $1', [id]);
+  },
+};
 
-    const totalCharged = data.charges
-      .filter((c) => !c.deleted_at)
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-
-    const totalPaid = data.payments
-      .filter((p) => !p.deleted_at)
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-
-    return {
-      visit_id: data.id,
-      status: data.status,
-      check_in_date: data.check_in_date,
-      check_out_date: data.check_out_date,
-      total_charged: totalCharged,
-      total_paid: totalPaid,
-      balance: totalCharged - totalPaid,
-    };
-  }
-}
-
-module.exports = new VisitModel();
+module.exports = VisitModel;
