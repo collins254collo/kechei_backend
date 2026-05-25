@@ -1,81 +1,140 @@
 const db = require('../config/db');
 
 const InvoiceModel = {
-  async getByVisit(visit_id) {
+
+  async getAll() {
     const { rows } = await db.query(
-      'SELECT * FROM invoices WHERE visit_id = $1', [visit_id]
+      `SELECT 
+         i.id,
+         i.invoice_number,
+         i.client_id,
+         i.visit_id,
+         i.total_services,
+         i.total_expenses,
+         i.total_amount,
+         i.final_amount,
+         i.paid_amount,
+         i.status,
+         i.issued_date,
+         i.due_date,
+         i.notes,
+         i.created_at,
+         i.updated_at,
+         COALESCE(c.full_name, vc.full_name) AS full_name
+       FROM invoices i
+       LEFT JOIN clients c  ON c.id = i.client_id
+       LEFT JOIN visits v   ON v.id = i.visit_id
+       LEFT JOIN clients vc ON vc.id = v.client_id
+       ORDER BY i.created_at DESC`
     );
-    return rows[0];
+    return rows;
   },
 
   async getById(id) {
     const { rows } = await db.query(
-      `SELECT i.*, c.full_name, c.phone, c.nationality
+      `SELECT 
+         i.*,
+         COALESCE(c.full_name, vc.full_name)   AS full_name,
+         COALESCE(c.phone,     vc.phone)        AS phone,
+         COALESCE(c.email,     vc.email)        AS email
        FROM invoices i
-       JOIN visits v ON v.id = i.visit_id
-       JOIN clients c ON c.id = v.client_id
+       LEFT JOIN clients c  ON c.id = i.client_id
+       LEFT JOIN visits v   ON v.id = i.visit_id
+       LEFT JOIN clients vc ON vc.id = v.client_id
        WHERE i.id = $1`,
       [id]
     );
     return rows[0];
   },
 
-  async getAll() {
+  async getByVisit(visit_id) {
     const { rows } = await db.query(
-      `SELECT i.*, c.full_name FROM invoices i
-       JOIN visits v ON v.id = i.visit_id
-       JOIN clients c ON c.id = v.client_id
-       ORDER BY i.issued_date DESC`
-    );
-    return rows;
-  },
-
-  // Generate next invoice number: INV-2025-001
-  async generateNumber() {
-    const year = new Date().getFullYear();
-    const { rows } = await db.query(
-      `SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE $1`,
-      [`INV-${year}-%`]
-    );
-    const seq = String(parseInt(rows[0].count) + 1).padStart(3, '0');
-    return `INV-${year}-${seq}`;
-  },
-
-  async create({ visit_id, total_expenses, total_amount }) {
-    const invoice_number = await this.generateNumber();
-    const { rows } = await db.query(
-      `INSERT INTO invoices (visit_id, invoice_number, total_expenses, total_amount, status, issued_date)
-       VALUES ($1, $2, $3, $4, 'unpaid', CURRENT_DATE) RETURNING *`,
-      [visit_id, invoice_number, total_expenses, total_amount]
+      `SELECT * FROM invoices WHERE visit_id = $1`,
+      [visit_id]
     );
     return rows[0];
   },
 
-  // Recalculate status based on payments
+  async generateNumber() {
+    // Uses existing sequence already in your DB
+    const { rows } = await db.query(`SELECT nextval('invoice_number_seq') AS seq`);
+    const year = new Date().getFullYear();
+    const seq  = String(rows[0].seq).padStart(4, '0');
+    return `INV-${year}-${seq}`;
+  },
+
+  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
+    const invoice_number = await this.generateNumber();
+    const { rows } = await db.query(
+      `INSERT INTO invoices
+         (invoice_number, client_id, visit_id, total_services, total_expenses,
+          total_amount, final_amount, status, issued_date, due_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'unpaid',$8,$9,$10)
+       RETURNING *`,
+      [
+        invoice_number,
+        client_id   ?? null,
+        visit_id    ?? null,
+        total_services,
+        total_expenses,
+        total_amount  ?? final_amount ?? 0,
+        final_amount  ?? total_amount ?? 0,
+        issued_date   || new Date().toISOString().split('T')[0],
+        due_date      || null,
+        notes         || null,
+      ]
+    );
+    return rows[0];
+  },
+
+  async update(id, { status, total_amount, final_amount, paid_amount, due_date, notes }) {
+    const { rows } = await db.query(
+      `UPDATE invoices SET
+         status       = COALESCE($1, status),
+         total_amount = COALESCE($2, total_amount),
+         final_amount = COALESCE($3, final_amount),
+         paid_amount  = COALESCE($4, paid_amount),
+         due_date     = COALESCE($5, due_date),
+         notes        = COALESCE($6, notes),
+         updated_at   = now()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        status      ?? null,
+        total_amount ?? null,
+        final_amount ?? null,
+        paid_amount  ?? null,
+        due_date     ?? null,
+        notes        ?? null,
+        id,
+      ]
+    );
+    return rows[0];
+  },
+
   async updateStatus(id) {
     const { rows: inv } = await db.query(
-      'SELECT total_amount FROM invoices WHERE id = $1', [id]
+      `SELECT final_amount FROM invoices WHERE id = $1`, [id]
     );
     const { rows: pay } = await db.query(
-      'SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM payments WHERE invoice_id = $1', [id]
+      `SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM payments WHERE invoice_id = $1`, [id]
     );
 
-    const total = parseFloat(inv[0].total_amount);
-    const paid = parseFloat(pay[0].paid);
+    const total = parseFloat(inv[0].final_amount);
+    const paid  = parseFloat(pay[0].paid);
 
-    let status = 'unpaid';
-    if (paid >= total) status = 'paid';
-    else if (paid > 0) status = 'partial';
+    const status = paid >= total ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
 
     const { rows } = await db.query(
-      'UPDATE invoices SET status=$1 WHERE id=$2 RETURNING *',
-      [status, id]
+      `UPDATE invoices SET status=$1, paid_amount=$2, updated_at=now()
+       WHERE id=$3 RETURNING *`,
+      [status, paid, id]
     );
     return rows[0];
   },
 
   async delete(id) {
-    await db.query('DELETE FROM invoices WHERE id = $1', [id]);
+    await db.query(`DELETE FROM invoices WHERE id = $1`, [id]);
   },
 };
 

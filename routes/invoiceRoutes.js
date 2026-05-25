@@ -1,15 +1,13 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const invoiceController = require('../controller/invoiceController');
-const { authenticate, adminOnly } = require('../middleware/authMiddleware');
+const { authenticate, adminOnly } = require('../middleware/authMiddleware'); 
 
-router.use(authenticate);
-
-router.get('/',           invoiceController.getAll);
-router.get('/:id',        invoiceController.getById);
-router.post('/',              invoiceController.create);        // manual creation
-router.post('/generate',      invoiceController.generateFromVisit); // generate from visit
-// router.put('/:id',        invoiceController.update);
-router.delete('/:id',     adminOnly, invoiceController.delete);
+router.get('/',          authenticate, invoiceController.getAll);
+router.get('/:id',       authenticate, invoiceController.getById);
+router.post('/',         authenticate, invoiceController.create);
+router.post('/generate', authenticate, invoiceController.generateFromVisit);
+router.patch('/:id',     authenticate, invoiceController.update);
+router.delete('/:id',    authenticate, adminOnly, invoiceController.delete); 
 
 module.exports = router;
