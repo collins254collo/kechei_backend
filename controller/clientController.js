@@ -31,18 +31,18 @@ const clientController = {
     }
   },
 
-  async create(req, res) {
-    try {
-      const { full_name, phone, nationality, notes } = req.body;
-      if (!full_name || !phone) {
-        return res.status(400).json({ error: 'full_name and phone are required' });
-      }
-      const client = await ClientModel.create({ full_name, phone, nationality, notes });
-      res.status(201).json(client);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+ async create(req, res) {
+  try {
+    const { full_name, phone, email, nationality, notes } = req.body;
+    if (!full_name || !phone) {
+      return res.status(400).json({ error: 'full_name and phone are required' });
     }
-  },
+    const client = await ClientModel.create({ full_name, phone, email, nationality, notes });
+    res.status(201).json(client);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
 
   async update(req, res) {
     try {
@@ -62,6 +62,16 @@ const clientController = {
       res.status(500).json({ error: err.message });
     }
   },
+
+async getProfile(req, res) {
+  try {
+    const profile = await ClientModel.getProfile(req.params.id);
+    if (!profile) return res.status(404).json({ error: 'Client not found' });
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
 };
 
 module.exports = clientController;

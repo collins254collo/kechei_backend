@@ -38,6 +38,17 @@ const paymentController = {
       res.status(500).json({ error: err.message });
     }
   },
+
+  // get All 
+async getAll(req, res) {
+  try {
+    const payments = await PaymentModel.getAll();  
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
+
 };
 
 module.exports = paymentController;

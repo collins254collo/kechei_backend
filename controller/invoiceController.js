@@ -4,7 +4,6 @@ const ExpenseModel   = require('../model/expenseModel');
 const PaymentModel   = require('../model/paymentModel');
 
 const invoiceController = {
-
   async getAll(req, res) {
     try {
       const invoices = await InvoiceModel.getAll();
@@ -51,36 +50,59 @@ const invoiceController = {
     }
   },
 
-  async generateFromVisit(req, res) {
-    try {
-      const { visit_id, due_date, notes } = req.body;
-      if (!visit_id) return res.status(400).json({ error: 'visit_id is required' });
+ async generateFromVisit(req, res) {
+  try {
+    const { visit_id, due_date, notes } = req.body;
+    if (!visit_id) return res.status(400).json({ error: 'visit_id is required' });
 
-      const existing = await InvoiceModel.getByVisit(visit_id);
-      if (existing) {
-        return res.status(409).json({ error: 'Invoice already exists for this visit', invoice: existing });
-      }
-
-      const { rows: visitRows } = await db.query(
-        `SELECT client_id FROM visits WHERE id = $1`, [visit_id]
-      );
-      if (!visitRows.length) return res.status(404).json({ error: 'Visit not found' });
-
-      const total_expenses = await ExpenseModel.getTotalByVisit(visit_id);
-      const invoice = await InvoiceModel.create({
-        client_id:    visitRows[0].client_id,
-        visit_id,
-        total_expenses,
-        total_amount:  total_expenses,
-        final_amount:  total_expenses,
-        due_date,
-        notes,
+    const existing = await InvoiceModel.getByVisit(visit_id);
+    if (existing) {
+      return res.status(409).json({
+        error: 'Invoice already exists for this visit',
+        invoice: existing,
       });
-      res.status(201).json(invoice);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
     }
-  },
+
+    const { rows: visitRows } = await db.query(
+      `SELECT v.client_id, v.reason,
+              COALESCE(c.full_name, '') AS client_name
+       FROM visits v
+       JOIN clients c ON c.id = v.client_id
+       WHERE v.id = $1`,
+      [visit_id]
+    );
+    if (!visitRows.length) return res.status(404).json({ error: 'Visit not found' });
+
+    const client_id = visitRows[0].client_id;
+
+    // Sum ALL expenses for this visit
+    const visit_expenses = await ExpenseModel.getTotalByVisit(visit_id);
+
+    // Sum ALL expenses for this client across all visits (unpaid invoices only)
+    const { rows: clientExpRows } = await db.query(
+      `SELECT COALESCE(SUM(e.amount), 0) AS total
+       FROM expenses e
+       JOIN visits v ON v.id = e.visit_id
+       WHERE v.client_id = $1`,
+      [client_id]
+    );
+    const total_expenses = parseFloat(clientExpRows[0].total);
+
+    const invoice = await InvoiceModel.create({
+      client_id,
+      visit_id,
+      total_expenses,
+      total_amount: total_expenses,
+      final_amount: total_expenses,
+      due_date,
+      notes,
+    });
+
+    res.status(201).json(invoice);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
 
   async update(req, res) {
     try {

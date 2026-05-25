@@ -70,6 +70,15 @@ const visitController = {
       res.status(500).json({ error: err.message });
     }
   },
+
+  async getAll(req, res) {
+  try {
+    const visits = await VisitModel.getAll();
+    res.json(visits);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
 };
 
 module.exports = visitController;

@@ -7,6 +7,7 @@ router.use(authenticate);
 
 router.get('/',         clientController.getAll);
 router.get('/search',   clientController.search);
+router.get('/:id/profile', clientController.getProfile);
 router.get('/:id',      clientController.getById);
 router.post('/',        clientController.create);
 router.put('/:id',      clientController.update);

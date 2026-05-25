@@ -55,6 +55,17 @@ async getActive() {
   async delete(id) {
     await db.query('DELETE FROM visits WHERE id = $1', [id]);
   },
+
+  // get 
+  async getAll() {
+  const { rows } = await db.query(
+    `SELECT v.*, c.full_name AS client_name, c.phone
+     FROM visits v
+     JOIN clients c ON c.id = v.client_id
+     ORDER BY v.created_at DESC`
+  );
+  return rows;
+},
 };
 
 module.exports = VisitModel;

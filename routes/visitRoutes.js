@@ -5,6 +5,7 @@ const { authenticate, adminOnly } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
+router.get('/', visitController.getAll);
 router.get('/active',              visitController.getActive);
 router.get('/client/:clientId',    visitController.getByClient);
 router.get('/:id',                 visitController.getById);
