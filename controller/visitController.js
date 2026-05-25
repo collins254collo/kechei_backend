@@ -29,13 +29,13 @@ const visitController = {
     }
   },
 
- async create(req, res) {
+async create(req, res) {
   try {
-    const { client_id, reason, notes } = req.body;
+    const { client_id, reason, notes, room_number } = req.body;
     if (!client_id || !reason?.trim()) {
       return res.status(400).json({ error: 'client_id and reason are required' });
     }
-    const visit = await VisitModel.create({ client_id, reason, notes });
+    const visit = await VisitModel.create({ client_id, reason, notes, room_number });
     res.status(201).json(visit);
   } catch (err) {
     res.status(500).json({ error: err.message });

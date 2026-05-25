@@ -69,6 +69,14 @@ const ClientModel = {
      ORDER BY p.created_at DESC`, [id]
   );
 
+  const { rows: expenses } = await db.query(
+  `SELECT e.*, v.reason AS visit_reason
+   FROM expenses e
+   JOIN visits v ON v.id = e.visit_id
+   WHERE v.client_id = $1
+   ORDER BY e.created_at DESC`, [id]
+);
+
   const total_visits   = visits.length;
   const total_invoiced = invoices.reduce((s, i) => s + parseFloat(i.total_amount || 0), 0);
   const total_paid     = payments.reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0);
@@ -80,6 +88,7 @@ const ClientModel = {
     visits,
     invoices,
     payments,
+    expenses,
   };
 },
 };

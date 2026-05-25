@@ -25,14 +25,14 @@ async getActive() {
   );
   return rows;
 },
-  async create({ client_id, reason, notes }) {
-    const { rows } = await db.query(
-      `INSERT INTO visits (client_id, reason, notes, status, created_at)
-      VALUES ($1, $2, $3, 'active', NOW()) RETURNING *`,
-      [client_id, reason, notes || null]
-    );
-    return rows[0];
-  },
+  async create({ client_id, reason, notes, room_number }) {
+  const { rows } = await db.query(
+    `INSERT INTO visits (client_id, reason, notes, room_number, status, created_at)
+     VALUES ($1, $2, $3, $4, 'active', NOW()) RETURNING *`,
+    [client_id, reason, notes || null, room_number || null]
+  );
+  return rows[0];
+},
 
   async complete(id) {
   const { rows } = await db.query(
@@ -43,11 +43,11 @@ async getActive() {
   return rows[0];
 },
 
-  async update(id, { check_in, check_out, status }) {
+  async update(id, { check_in, check_out, status, room_number }) {
     const { rows } = await db.query(
-      `UPDATE visits SET check_in=$1, check_out=$2, status=$3
-       WHERE id=$4 RETURNING *`,
-      [check_in, check_out, status, id]
+      `UPDATE visits SET check_in=$1, check_out=$2, status=$3, room_number=$4
+       WHERE id=$5 RETURNING *`,
+      [check_in, check_out, status, room_number, id]
     );
     return rows[0];
   },
