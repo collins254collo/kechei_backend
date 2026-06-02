@@ -34,7 +34,7 @@ const authController = {
 
   async getMe(req, res) {
     try {
-      const user = await UserModel.getById(req.user.id);
+      const user = await UserModel.getByEmail(req.user.id);
       res.json(user);
     } catch (err) {
       res.status(500).json({ error: err.message });
