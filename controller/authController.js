@@ -32,13 +32,23 @@ const authController = {
     }
   },
 
-  async getMe(req, res) {
-    try {
-      const user = await UserModel.getByEmail(req.user.id);
-      res.json(user);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+ async getMe(req, res) {
+  try {
+    const user = await UserModel.getById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    res.json({
+      id: user.id,
+      // name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
   },
 
   async createUser(req, res) {

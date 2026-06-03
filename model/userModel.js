@@ -2,14 +2,20 @@ const db = require('../config/db');
 const bcrypt = require('bcrypt');
 
 const UserModel = {
-async getByEmail(email) {
-  const allUsers = await db.query('SELECT email FROM users');
+  async getById(id) {
+    const { rows } = await db.query(
+      'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
+      [id]
+    );
+    return rows[0];
+  },
 
-  const { rows } = await db.query(
-    'SELECT * FROM users WHERE email = $1', [email]
-  );
-  return rows[0];
-},
+  async getByEmail(email) {
+    const { rows } = await db.query(
+      'SELECT * FROM users WHERE email = $1', [email]
+    );
+    return rows[0];
+  },
 
   async getAll() {
     const { rows } = await db.query(
