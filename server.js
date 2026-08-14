@@ -39,7 +39,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // });
 
 // 404
-app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
+app.use((req, res) => res.status(404).json({ error: 'Page not found' }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Kechei API running on port ${PORT}`));
