@@ -1,3 +1,32 @@
+// Camp / business details 
+const CAMP = {
+  name: 'Kechei Centre',
+  tagline: 'Iten, Kenya — Home of Champions',
+  address: 'Iten, Elgeyo-Marakwet County, Kenya',
+  phone: '+254 7XX XXX XXX',
+  email: 'billing@kechei.com',
+  website: 'www.kechei.com',
+  // Required on a compliant Kenyan VAT invoice
+  kraPin: 'PXXXXXXXXXX',
+  // Point this at a hosted image (Cloudinary URL, etc). Falls back to a
+  // text wordmark if left blank.
+  logoUrl: '',
+};
+
+const BANK = {
+  bankName: 'Equity Bank Kenya',
+  accountName: 'Kechei Centre Ltd',
+  accountNumber: '0000000000000',
+  branch: 'Iten Branch',
+  swiftCode: 'EQBLKENA',
+  // M-Pesa is the dominant local rail — worth including alongside bank details
+  mpesaPaybill: '000000',
+  mpesaAccount: 'Invoice Number',
+};
+
+// KRA standard VAT rate
+const VAT_RATE = 0.16;
+
 function fmt(n) {
   return `KES ${Number(n || 0).toLocaleString()}`;
 }
@@ -10,16 +39,46 @@ function fmtDate(d) {
 function buildInvoiceHtml(invoice) {
   const {
     invoice_number, full_name, phone, email,
-    total_amount, total_expenses, status,
+    total_expenses, total_amount, final_amount, status,
     issued_date, due_date, notes,
+    // Optional itemized breakdown: [{ date, description, amount }, ...]
+    // Falls back to a single "Expenses" line using total_expenses if omitted.
+    expenses,
   } = invoice;
 
   const statusColors = {
-    paid:    { bg: '#eaf4ee', text: '#2d7a47' },
-    partial: { bg: '#fef4e4', text: '#9a6520' },
-    unpaid:  { bg: '#fdeeed', text: '#b03030' },
+    paid:    { bg: '#eaf4ee', text: '#2d7a47', border: '#bfe0cc' },
+    partial: { bg: '#fef4e4', text: '#9a6520', border: '#f5d9a8' },
+    unpaid:  { bg: '#fdeeed', text: '#b03030', border: '#f3c6c3' },
   };
   const sc = statusColors[status] || statusColors.unpaid;
+
+  const logoBlock = CAMP.logoUrl
+    ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
+    : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
+
+  // Normalize line items — use the itemized array if given, otherwise a
+  // single roll-up row so the template still works with old callers.
+  const lineItems = Array.isArray(expenses) && expenses.length
+    ? expenses
+    : [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
+
+  // Prefer the amounts already stored on the invoice (total_amount = pre-VAT
+  // subtotal, final_amount = VAT-inclusive total) so the PDF always matches
+  // what payments/balance are tracked against in the DB. Only compute from
+  // the line items as a fallback — e.g. a preview before the invoice exists.
+  const hasStoredAmounts = total_amount != null && final_amount != null;
+  const subtotal   = hasStoredAmounts ? Number(total_amount) : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const grandTotal = hasStoredAmounts ? Number(final_amount) : subtotal * (1 + VAT_RATE);
+  const vatAmount   = grandTotal - subtotal;
+
+  const lineItemRows = lineItems.map(item => `
+        <tr>
+          <td>${fmtDate(item.date || item.expense_date)}</td>
+          <td>${item.description || item.category || '—'}</td>
+          <td class="amt">${fmt(item.amount)}</td>
+        </tr>`).join('');
+
 
   return `
   <!DOCTYPE html>
@@ -28,76 +87,168 @@ function buildInvoiceHtml(invoice) {
     <meta charset="utf-8" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1714; padding: 48px; }
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #1a1712; }
-      .brand { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
-      .brand-sub { font-size: 10px; color: #6b6456; letter-spacing: 0.14em; text-transform: uppercase; margin-top: 4px; }
+
+      body {
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+        color: #1a1714;
+        padding: 52px 56px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* ── Header ── */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 36px;
+        padding-bottom: 28px;
+        border-bottom: 2px solid #1a1712;
+      }
+
+      .brand-block { display: flex; align-items: center; gap: 14px; }
+
+      .logo-img { height: 52px; width: auto; object-fit: contain; }
+
+      .logo-mark {
+        width: 52px; height: 52px; border-radius: 10px;
+        background: #1a1712; color: #f4f1ec;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
+      }
+
+      .brand-name { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; }
+      .brand-sub { font-size: 10px; color: #6b6456; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
+      .brand-contact { font-size: 10.5px; color: #948c7c; margin-top: 6px; line-height: 1.6; }
+
       .inv-meta { text-align: right; }
-      .inv-number { font-size: 13px; font-weight: 600; color: #6b6456; letter-spacing: 0.04em; }
-      .status-badge { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; background: ${sc.bg}; color: ${sc.text}; }
-      .bill-to { margin-bottom: 32px; }
+      .inv-title { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #b0a898; margin-bottom: 6px; }
+      .inv-number { font-size: 15px; font-weight: 700; color: #1a1712; letter-spacing: 0.02em; }
+      .status-badge {
+        display: inline-block; margin-top: 10px; padding: 5px 14px;
+        border-radius: 6px; font-size: 10.5px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        background: ${sc.bg}; color: ${sc.text}; border: 1px solid ${sc.border};
+      }
+
+      /* ── Bill to / dates ── */
+      .info-row { display: flex; justify-content: space-between; margin-bottom: 36px; gap: 40px; }
       .label { font-size: 9px; color: #b0a898; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
-      .client-name { font-size: 16px; font-weight: 600; }
+      .client-name { font-size: 15px; font-weight: 600; }
       .client-detail { font-size: 12px; color: #6b6456; margin-top: 2px; }
-      .dates { display: flex; gap: 48px; margin-bottom: 32px; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+      .dates { display: flex; gap: 40px; text-align: right; }
+      .date-item div:last-child { font-weight: 600; margin-top: 2px; }
+
+      /* ── Line items ── */
+      table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
       th { text-align: left; font-size: 9px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid #e5e0d8; }
       td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid #e5e0d8; }
       .amt { text-align: right; }
-      .total-row td { font-weight: 700; font-size: 16px; border-bottom: none; border-top: 2px solid #1a1712; padding-top: 16px; }
-      .notes { margin-top: 32px; padding: 16px; background: #f8f6f2; border-radius: 8px; font-size: 12px; color: #6b6456; line-height: 1.6; }
-      .footer { margin-top: 48px; text-align: center; font-size: 10px; color: #b0a898; }
+      .subtotal-row td { border-bottom: none; padding: 6px 0; font-size: 12.5px; color: #6b6456; }
+      .subtotal-row.vat-row td { padding-bottom: 12px; }
+      .total-row td { font-weight: 700; font-size: 17px; border-bottom: none; border-top: 2px solid #1a1712; padding-top: 16px; }
+
+      /* ── Payment details ── */
+      .payment-section {
+        display: flex; gap: 20px; margin-top: 8px; margin-bottom: 28px;
+      }
+      .payment-box {
+        flex: 1; padding: 18px 20px; background: #f8f6f2;
+        border: 1px solid #e5e0d8; border-radius: 10px;
+      }
+      .payment-title {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+        text-transform: uppercase; color: #1a1712; margin-bottom: 12px;
+      }
+      .payment-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+      .payment-row span:first-child { color: #948c7c; }
+      .payment-row span:last-child { font-weight: 600; text-align: right; }
+
+      /* ── Notes / footer ── */
+      .notes { margin-bottom: 28px; padding: 16px 18px; background: #f8f6f2; border-radius: 8px; font-size: 12px; color: #6b6456; line-height: 1.6; }
+      .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid #e5e0d8; text-align: center; }
+      .footer-thanks { font-size: 12px; font-weight: 600; color: #1a1712; margin-bottom: 4px; }
+      .footer-sub { font-size: 10px; color: #b0a898; }
     </style>
   </head>
   <body>
     <div class="header">
-      <div>
-        <div class="brand">Kechei</div>
-        <div class="brand-sub">Client Ledger</div>
+      <div class="brand-block">
+        ${logoBlock}
+        <div>
+          <div class="brand-name">${CAMP.name}</div>
+          <div class="brand-sub">${CAMP.tagline}</div>
+          <div class="brand-contact">${CAMP.address}<br/>${CAMP.phone} · ${CAMP.email}<br/>KRA PIN: ${CAMP.kraPin}</div>
+        </div>
       </div>
       <div class="inv-meta">
+        <div class="inv-title">Invoice</div>
         <div class="inv-number">${invoice_number}</div>
         <div class="status-badge">${status}</div>
       </div>
     </div>
 
-    <div class="bill-to">
-      <div class="label">Billed to</div>
-      <div class="client-name">${full_name || '—'}</div>
-      ${phone ? `<div class="client-detail">${phone}</div>` : ''}
-      ${email ? `<div class="client-detail">${email}</div>` : ''}
-    </div>
-
-    <div class="dates">
+    <div class="info-row">
       <div>
-        <div class="label">Issued</div>
-        <div>${fmtDate(issued_date)}</div>
+        <div class="label">Billed to</div>
+        <div class="client-name">${full_name || '—'}</div>
+        ${phone ? `<div class="client-detail">${phone}</div>` : ''}
+        ${email ? `<div class="client-detail">${email}</div>` : ''}
       </div>
-      <div>
-        <div class="label">Due</div>
-        <div>${due_date ? fmtDate(due_date) : '—'}</div>
+      <div class="dates">
+        <div class="date-item">
+          <div class="label">Issued</div>
+          <div>${fmtDate(issued_date)}</div>
+        </div>
+        <div class="date-item">
+          <div class="label">Due</div>
+          <div>${due_date ? fmtDate(due_date) : '—'}</div>
+        </div>
       </div>
     </div>
 
     <table>
       <thead>
-        <tr><th>Description</th><th class="amt">Amount</th></tr>
+        <tr><th>Date</th><th>Description</th><th class="amt">Amount</th></tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>Expenses</td>
-          <td class="amt">${fmt(total_expenses)}</td>
+      <tbody>${lineItemRows}
+        <tr class="subtotal-row">
+          <td colspan="2">Subtotal</td>
+          <td class="amt">${fmt(subtotal)}</td>
+        </tr>
+        <tr class="subtotal-row vat-row">
+          <td colspan="2">VAT (${(VAT_RATE * 100).toFixed(0)}%)</td>
+          <td class="amt">${fmt(vatAmount)}</td>
         </tr>
         <tr class="total-row">
-          <td>Total due</td>
-          <td class="amt">${fmt(total_amount)}</td>
+          <td colspan="2">Total due</td>
+          <td class="amt">${fmt(grandTotal)}</td>
         </tr>
       </tbody>
     </table>
 
+    <div class="payment-section">
+      <div class="payment-box">
+        <div class="payment-title">Bank transfer</div>
+        <div class="payment-row"><span>Bank</span><span>${BANK.bankName}</span></div>
+        <div class="payment-row"><span>Account name</span><span>${BANK.accountName}</span></div>
+        <div class="payment-row"><span>Account number</span><span>${BANK.accountNumber}</span></div>
+        <div class="payment-row"><span>Branch</span><span>${BANK.branch}</span></div>
+        <div class="payment-row"><span>Swift code</span><span>${BANK.swiftCode}</span></div>
+      </div>
+      <div class="payment-box">
+        <div class="payment-title">M-Pesa</div>
+        <div class="payment-row"><span>Paybill</span><span>${BANK.mpesaPaybill}</span></div>
+        <div class="payment-row"><span>Account</span><span>${invoice_number || BANK.mpesaAccount}</span></div>
+      </div>
+    </div>
+
     ${notes ? `<div class="notes"><strong>Notes:</strong><br/>${notes}</div>` : ''}
 
-    <div class="footer">Thank you for your business — Kechei</div>
+    <div class="footer">
+      <div class="footer-thanks">Asante — thank you for training with ${CAMP.name}</div>
+      <div class="footer-sub">${CAMP.website}</div>
+    </div>
   </body>
   </html>
   `;

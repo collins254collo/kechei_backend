@@ -9,6 +9,18 @@ const ExpenseModel = {
     return rows;
   },
 
+  // line items for a specific invoice, in date order — feeds the invoice template
+  async getByInvoice(invoice_id) {
+    const { rows } = await db.query(
+      `SELECT e.*, e.notes AS description
+       FROM expenses e
+       WHERE e.invoice_id = $1
+       ORDER BY e.expense_date ASC`,
+      [invoice_id]
+    );
+    return rows;
+  },
+
   async getTotalByVisit(visit_id) {
     const { rows } = await db.query(
       `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE visit_id = $1`,
@@ -41,7 +53,6 @@ const ExpenseModel = {
   },
 
   //  stamp invoice_id on all unbilled expenses for a visit. Runs inside a transaction,
-  // so it takes the transaction client (dbClient) rather than the module-level db.
   async markInvoicedByVisit(dbClient, visit_id, invoice_id) {
     await dbClient.query(
       `UPDATE expenses SET invoice_id = $1
