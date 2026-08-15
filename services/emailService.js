@@ -8,7 +8,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendInvoiceEmail({ to, invoice, pdfBuffer }) {
   const { data, error } = await resend.emails.send({
-    from: 'Kechei <invoices@kechei.com>',
+    from: 'njogucollins10397@gmail.com',
     to,
     subject: `Invoice ${invoice.invoice_number} from Kechei`,
     html: `

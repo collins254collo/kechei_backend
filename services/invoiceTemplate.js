@@ -1,4 +1,27 @@
-// Camp / business details 
+const fs = require('fs');
+const path = require('path');
+
+// Puppeteer renders this HTML string with no server/origin context, so a
+// relative path like "/public/kechei.svg" can't be fetched — it silently
+// fails and you get no logo. Two ways to make it work instead:
+//   1) Read the file at generation time and inline it as a base64 data URI
+//      (what getLogoDataUri() below does) — no network dependency at all.
+//   2) Point CAMP.logoUrl at a real, publicly reachable absolute URL
+//      (e.g. a Cloudinary URL) — Puppeteer can fetch that fine.
+function getLogoDataUri() {
+  try {
+    // Adjust this to wherever the svg actually lives relative to this file
+    const svgPath = path.join(__dirname, '../public/kechei.svg');
+    const svg = fs.readFileSync(svgPath, 'utf8');
+    const base64 = Buffer.from(svg).toString('base64');
+    return `data:image/svg+xml;base64,${base64}`;
+  } catch (err) {
+    console.error('Logo load failed, falling back to text mark:', err.message);
+    return '';
+  }
+}
+
+// Camp / business details
 const CAMP = {
   name: 'Kechei Centre',
   tagline: 'Iten, Kenya — Home of Champions',
@@ -8,9 +31,12 @@ const CAMP = {
   website: 'www.kechei.com',
   // Required on a compliant Kenyan VAT invoice
   kraPin: 'PXXXXXXXXXX',
-  // Point this at a hosted image (Cloudinary URL, etc). Falls back to a
-  // text wordmark if left blank.
-  logoUrl: '',
+  // Base64 data URI of the logo, loaded once at module load. Falls back to
+  // a text wordmark (the logo-mark div) if the file can't be read.
+  logoUrl: getLogoDataUri(),
+  // Small accent used for the top rule and status accents — swap for the
+  // camp's brand color if it differs from this earthy default.
+  accentColor: '#b0523a',
 };
 
 const BANK = {
@@ -56,6 +82,9 @@ function buildInvoiceHtml(invoice) {
   const logoBlock = CAMP.logoUrl
     ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
     : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
+  // ^ Note: this was previously `src='/public/kechei.svg alt="..."` — the
+  // unclosed single-quote swallowed alt/class into the src value, AND it
+  // hardcoded a relative path instead of reading CAMP.logoUrl. Fixed above.
 
   // Normalize line items — use the itemized array if given, otherwise a
   // single roll-up row so the template still works with old callers.
@@ -91,39 +120,60 @@ function buildInvoiceHtml(invoice) {
       body {
         font-family: 'Helvetica Neue', Arial, sans-serif;
         color: #1a1714;
-        padding: 52px 56px;
+        padding: 0 56px 52px;
         font-size: 13px;
         line-height: 1.5;
       }
 
-      /* ── Header ── */
+      /* ── Top accent bar ── */
+      .accent-bar {
+        height: 6px;
+        margin: 0 -56px 40px;
+        background: ${CAMP.accentColor};
+      }
+
+      /* ── Header — logo + brand centered ── */
       .header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .logo-img { height: 60px; width: auto; object-fit: contain; margin-bottom: 14px; }
+
+      .logo-mark {
+        width: 60px; height: 60px; border-radius: 12px;
+        background: #1a1712; color: #f4f1ec;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
+        margin-bottom: 14px;
+      }
+
+      .brand-name { font-size: 23px; font-weight: 800; letter-spacing: -0.3px; }
+      .brand-sub { font-size: 10.5px; color: #6b6456; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 5px; }
+      .brand-contact { font-size: 11px; color: #948c7c; margin-top: 10px; line-height: 1.7; }
+
+      .header-divider {
+        width: 100%;
+        border-bottom: 2px solid #1a1712;
+        margin-top: 26px;
+        padding-bottom: 22px;
+      }
+
+      /* ── Invoice meta strip (number / status / dates) ── */
+      .meta-strip {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 36px;
-        padding-bottom: 28px;
-        border-bottom: 2px solid #1a1712;
+        margin-bottom: 34px;
       }
 
-      .brand-block { display: flex; align-items: center; gap: 14px; }
+      .label { font-size: 9px; color: #b0a898; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
 
-      .logo-img { height: 52px; width: auto; object-fit: contain; }
-
-      .logo-mark {
-        width: 52px; height: 52px; border-radius: 10px;
-        background: #1a1712; color: #f4f1ec;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
-      }
-
-      .brand-name { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; }
-      .brand-sub { font-size: 10px; color: #6b6456; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
-      .brand-contact { font-size: 10.5px; color: #948c7c; margin-top: 6px; line-height: 1.6; }
-
-      .inv-meta { text-align: right; }
-      .inv-title { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #b0a898; margin-bottom: 6px; }
-      .inv-number { font-size: 15px; font-weight: 700; color: #1a1712; letter-spacing: 0.02em; }
+      .inv-title { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #b0a898; margin-bottom: 6px; }
+      .inv-number { font-size: 16px; font-weight: 700; color: #1a1712; letter-spacing: 0.02em; }
       .status-badge {
         display: inline-block; margin-top: 10px; padding: 5px 14px;
         border-radius: 6px; font-size: 10.5px; font-weight: 700;
@@ -131,13 +181,13 @@ function buildInvoiceHtml(invoice) {
         background: ${sc.bg}; color: ${sc.text}; border: 1px solid ${sc.border};
       }
 
-      /* ── Bill to / dates ── */
-      .info-row { display: flex; justify-content: space-between; margin-bottom: 36px; gap: 40px; }
-      .label { font-size: 9px; color: #b0a898; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
-      .client-name { font-size: 15px; font-weight: 600; }
-      .client-detail { font-size: 12px; color: #6b6456; margin-top: 2px; }
       .dates { display: flex; gap: 40px; text-align: right; }
       .date-item div:last-child { font-weight: 600; margin-top: 2px; }
+
+      /* ── Bill to ── */
+      .bill-to { margin-bottom: 34px; }
+      .client-name { font-size: 15px; font-weight: 600; }
+      .client-detail { font-size: 12px; color: #6b6456; margin-top: 2px; }
 
       /* ── Line items ── */
       table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
@@ -172,28 +222,21 @@ function buildInvoiceHtml(invoice) {
     </style>
   </head>
   <body>
+    <div class="accent-bar"></div>
+
     <div class="header">
-      <div class="brand-block">
-        ${logoBlock}
-        <div>
-          <div class="brand-name">${CAMP.name}</div>
-          <div class="brand-sub">${CAMP.tagline}</div>
-          <div class="brand-contact">${CAMP.address}<br/>${CAMP.phone} · ${CAMP.email}<br/>KRA PIN: ${CAMP.kraPin}</div>
-        </div>
-      </div>
-      <div class="inv-meta">
+      ${logoBlock}
+      <div class="brand-name">${CAMP.name}</div>
+      <div class="brand-sub">${CAMP.tagline}</div>
+      <div class="brand-contact">${CAMP.address} · ${CAMP.phone} · ${CAMP.email}<br/>KRA PIN: ${CAMP.kraPin}</div>
+      <div class="header-divider"></div>
+    </div>
+
+    <div class="meta-strip">
+      <div>
         <div class="inv-title">Invoice</div>
         <div class="inv-number">${invoice_number}</div>
         <div class="status-badge">${status}</div>
-      </div>
-    </div>
-
-    <div class="info-row">
-      <div>
-        <div class="label">Billed to</div>
-        <div class="client-name">${full_name || '—'}</div>
-        ${phone ? `<div class="client-detail">${phone}</div>` : ''}
-        ${email ? `<div class="client-detail">${email}</div>` : ''}
       </div>
       <div class="dates">
         <div class="date-item">
@@ -205,6 +248,13 @@ function buildInvoiceHtml(invoice) {
           <div>${due_date ? fmtDate(due_date) : '—'}</div>
         </div>
       </div>
+    </div>
+
+    <div class="bill-to">
+      <div class="label">Billed to</div>
+      <div class="client-name">${full_name || '—'}</div>
+      ${phone ? `<div class="client-detail">${phone}</div>` : ''}
+      ${email ? `<div class="client-detail">${email}</div>` : ''}
     </div>
 
     <table>
