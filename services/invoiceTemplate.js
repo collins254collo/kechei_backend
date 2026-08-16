@@ -1,16 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Puppeteer renders this HTML string with no server/origin context, so a
-// relative path like "/public/kechei.svg" can't be fetched — it silently
-// fails and you get no logo. Two ways to make it work instead:
-//   1) Read the file at generation time and inline it as a base64 data URI
-//      (what getLogoDataUri() below does) — no network dependency at all.
-//   2) Point CAMP.logoUrl at a real, publicly reachable absolute URL
-//      (e.g. a Cloudinary URL) — Puppeteer can fetch that fine.
+
 function getLogoDataUri() {
   try {
-    // Adjust this to wherever the svg actually lives relative to this file
     const svgPath = path.join(__dirname, '../public/kechei.svg');
     const svg = fs.readFileSync(svgPath, 'utf8');
     const base64 = Buffer.from(svg).toString('base64');
@@ -31,10 +24,7 @@ const CAMP = {
   website: 'www.kechei.com',
   // Required on a compliant Kenyan VAT invoice
   kraPin: 'PXXXXXXXXXX',
-  // Base64 data URI of the logo, loaded once at module load. Falls back to
-  // a text wordmark (the logo-mark div) if the file can't be read.
   logoUrl: getLogoDataUri(),
-  // Small accent used for the top rule and status accents — swap for the
   // camp's brand color if it differs from this earthy default.
   accentColor: '#b0523a',
 };
@@ -45,7 +35,6 @@ const BANK = {
   accountNumber: '0000000000000',
   branch: 'Iten Branch',
   swiftCode: 'EQBLKENA',
-  // M-Pesa is the dominant local rail — worth including alongside bank details
   mpesaPaybill: '000000',
   mpesaAccount: 'Invoice Number',
 };
@@ -67,8 +56,6 @@ function buildInvoiceHtml(invoice) {
     invoice_number, full_name, phone, email,
     total_expenses, total_amount, final_amount, status,
     issued_date, due_date, notes,
-    // Optional itemized breakdown: [{ date, description, amount }, ...]
-    // Falls back to a single "Expenses" line using total_expenses if omitted.
     expenses,
   } = invoice;
 
@@ -82,12 +69,7 @@ function buildInvoiceHtml(invoice) {
   const logoBlock = CAMP.logoUrl
     ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
     : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
-  // ^ Note: this was previously `src='/public/kechei.svg alt="..."` — the
-  // unclosed single-quote swallowed alt/class into the src value, AND it
-  // hardcoded a relative path instead of reading CAMP.logoUrl. Fixed above.
 
-  // Normalize line items — use the itemized array if given, otherwise a
-  // single roll-up row so the template still works with old callers.
   const lineItems = Array.isArray(expenses) && expenses.length
     ? expenses
     : [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
@@ -101,12 +83,53 @@ function buildInvoiceHtml(invoice) {
   const grandTotal = hasStoredAmounts ? Number(final_amount) : subtotal * (1 + VAT_RATE);
   const vatAmount   = grandTotal - subtotal;
 
-  const lineItemRows = lineItems.map(item => `
+  //Where the money went" breakdown 
+  // Groups the itemized expenses by category so the client sees a spend
+  // summary (bar + legend) above the raw line items, not just a total.
+  // Falls back to "Other" for uncategorized items so nothing disappears
+  // from the summary silently.
+  const categoryTotals = lineItems.reduce((acc, item) => {
+    const cat = (item.category || 'Other').trim() || 'Other';
+    acc[cat] = (acc[cat] || 0) + Number(item.amount || 0);
+    return acc;
+  }, {});
+  const categoryEntries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+  const categorySpendTotal = categoryEntries.reduce((sum, [, amt]) => sum + amt, 0) || 1;
+
+  // Fixed, distinct swatches so each category is visually consistent
+  // regardless of how many categories a given invoice has.
+  const categoryPalette = ['#b0523a', '#9a6520', '#3a5fa0', '#2d7a47', '#6a3aaa', '#a03a6a', '#5a7a8a', '#8a7a3a'];
+
+  const categoryBarSegments = categoryEntries.map(([cat, amt], i) => {
+    const pct = (amt / categorySpendTotal) * 100;
+    return `<div class="cat-seg" style="width:${pct}%;background:${categoryPalette[i % categoryPalette.length]}"></div>`;
+  }).join('');
+
+  const categoryLegendRows = categoryEntries.map(([cat, amt], i) => {
+    const pct = (amt / categorySpendTotal) * 100;
+    return `
+        <div class="cat-legend-row">
+          <span class="cat-dot" style="background:${categoryPalette[i % categoryPalette.length]}"></span>
+          <span class="cat-legend-name">${cat}</span>
+          <span class="cat-legend-pct">${pct.toFixed(0)}%</span>
+          <span class="cat-legend-amt">${fmt(amt)}</span>
+        </div>`;
+  }).join('');
+
+  const showCategoryBreakdown = categoryEntries.length > 1
+    || (categoryEntries.length === 1 && categoryEntries[0][0] !== 'Other');
+
+  const lineItemRows = lineItems.map(item => {
+    const cat = (item.category || '').trim();
+    const catBadge = cat ? `<span class="tag" style="background:${categoryPalette[categoryEntries.findIndex(([c]) => c === cat) % categoryPalette.length]}1a;color:${categoryPalette[categoryEntries.findIndex(([c]) => c === cat) % categoryPalette.length]}">${cat}</span>` : '—';
+    return `
         <tr>
           <td>${fmtDate(item.date || item.expense_date)}</td>
           <td>${item.description || item.category || '—'}</td>
+          <td class="cat-cell">${catBadge}</td>
           <td class="amt">${fmt(item.amount)}</td>
-        </tr>`).join('');
+        </tr>`;
+  }).join('');
 
 
   return `
@@ -189,11 +212,37 @@ function buildInvoiceHtml(invoice) {
       .client-name { font-size: 15px; font-weight: 600; }
       .client-detail { font-size: 12px; color: #6b6456; margin-top: 2px; }
 
+      /* ── Where the money went — category breakdown ── */
+      .spend-summary {
+        margin-bottom: 30px; padding: 20px 22px; background: #f8f6f2;
+        border: 1px solid #e5e0d8; border-radius: 10px;
+      }
+      .spend-title {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+        text-transform: uppercase; color: #1a1712; margin-bottom: 14px;
+      }
+      .cat-bar {
+        display: flex; width: 100%; height: 10px; border-radius: 5px;
+        overflow: hidden; margin-bottom: 16px; background: #e5e0d8;
+      }
+      .cat-seg { height: 100%; }
+      .cat-legend { display: flex; flex-direction: column; gap: 8px; }
+      .cat-legend-row { display: flex; align-items: center; font-size: 12px; }
+      .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 10px; }
+      .cat-legend-name { flex: 1; color: #1a1714; }
+      .cat-legend-pct { width: 42px; color: #948c7c; text-align: right; margin-right: 16px; }
+      .cat-legend-amt { width: 90px; text-align: right; font-weight: 600; }
+
       /* ── Line items ── */
       table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
       th { text-align: left; font-size: 9px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid #e5e0d8; }
       td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid #e5e0d8; }
       .amt { text-align: right; }
+      .cat-cell { font-size: 12px; }
+      .tag {
+        display: inline-block; padding: 3px 9px; border-radius: 5px;
+        font-size: 10.5px; font-weight: 600;
+      }
       .subtotal-row td { border-bottom: none; padding: 6px 0; font-size: 12.5px; color: #6b6456; }
       .subtotal-row.vat-row td { padding-bottom: 12px; }
       .total-row td { font-weight: 700; font-size: 17px; border-bottom: none; border-top: 2px solid #1a1712; padding-top: 16px; }
@@ -257,21 +306,28 @@ function buildInvoiceHtml(invoice) {
       ${email ? `<div class="client-detail">${email}</div>` : ''}
     </div>
 
+    ${showCategoryBreakdown ? `
+    <div class="spend-summary">
+      <div class="spend-title">Where this went</div>
+      <div class="cat-bar">${categoryBarSegments}</div>
+      <div class="cat-legend">${categoryLegendRows}</div>
+    </div>` : ''}
+
     <table>
       <thead>
-        <tr><th>Date</th><th>Description</th><th class="amt">Amount</th></tr>
+        <tr><th>Date</th><th>Description</th><th>Category</th><th class="amt">Amount</th></tr>
       </thead>
       <tbody>${lineItemRows}
         <tr class="subtotal-row">
-          <td colspan="2">Subtotal</td>
+          <td colspan="3">Subtotal</td>
           <td class="amt">${fmt(subtotal)}</td>
         </tr>
         <tr class="subtotal-row vat-row">
-          <td colspan="2">VAT (${(VAT_RATE * 100).toFixed(0)}%)</td>
+          <td colspan="3">VAT (${(VAT_RATE * 100).toFixed(0)}%)</td>
           <td class="amt">${fmt(vatAmount)}</td>
         </tr>
         <tr class="total-row">
-          <td colspan="2">Total due</td>
+          <td colspan="3">Total due</td>
           <td class="amt">${fmt(grandTotal)}</td>
         </tr>
       </tbody>
