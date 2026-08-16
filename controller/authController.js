@@ -9,7 +9,6 @@ const authController = {
       if (!email || !password) {
         return res.status(400).json({ error: 'Email and password required' });
       }
-      console.log(req.body);
 
       const user = await UserModel.getByEmail(email);
       if (!user) return res.status(401).json({ error: 'no such email' });
