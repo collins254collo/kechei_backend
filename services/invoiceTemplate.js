@@ -129,11 +129,6 @@ function buildInvoiceHtml(invoice) {
 
   const paymentList = Array.isArray(payments) ? payments : [];
 
-  // ── Single account ledger — the only table on the invoice now.
-  // Every expense line and the VAT amount post as debits (what's owed),
-  // every payment posts as a credit (what's been paid), sorted
-  // chronologically with a running balance so the client sees the full
-  // movement — charges and payments together — at a glance.
   const ledgerEntries = [];
 
   lineItems.forEach(item => {
@@ -169,8 +164,6 @@ function buildInvoiceHtml(invoice) {
     });
   });
 
-  // Chronological order. Same-day ties: charges post before payments,
-  // since a payment can't be applied to a charge that hasn't posted yet.
   ledgerEntries.sort((a, b) => {
     const dA = new Date(a.date || 0).getTime();
     const dB = new Date(b.date || 0).getTime();
