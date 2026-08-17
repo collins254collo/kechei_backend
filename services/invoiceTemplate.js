@@ -113,11 +113,6 @@ function buildInvoiceHtml(invoice) {
     return idx === -1 ? '#948c7c' : categoryPalette[idx % categoryPalette.length];
   }
 
-  const categoryBarSegments = categoryEntries.map(([cat, amt], i) => {
-    const pct = (amt / categorySpendTotal) * 100;
-    return `<div class="cat-seg" style="width:${pct}%;background:${categoryPalette[i % categoryPalette.length]}"></div>`;
-  }).join('');
-
   const categoryLegendRows = categoryEntries.map(([cat, amt], i) => {
     const pct = (amt / categorySpendTotal) * 100;
     return `
@@ -132,36 +127,24 @@ function buildInvoiceHtml(invoice) {
   const showCategoryBreakdown = categoryEntries.length > 1
     || (categoryEntries.length === 1 && categoryEntries[0][0] !== 'Other');
 
-  const lineItemRows = lineItems.map(item => {
-    const cat = (item.category || '').trim();
-    const desc = item.description || item.notes || 'Expense';
-    const catBadge = cat
-      ? `<span class="tag" style="background:${colorForCategory(cat)}1a;color:${colorForCategory(cat)}">${cat}</span>`
-      : '—';
-    return `
-        <tr>
-          <td>${fmtDate(item.date || item.expense_date)}</td>
-          <td>${desc}</td>
-          <td class="cat-cell">${catBadge}</td>
-          <td class="amt">${fmt(item.amount)}</td>
-        </tr>`;
-  }).join('');
-
   const paymentList = Array.isArray(payments) ? payments : [];
 
-  // ── Account ledger — the single debit / credit view of this account.
-  // Replaces the old separate "payments received" table: every expense
-  // line and the VAT amount post as debits (increase what's owed), every
-  // payment posts as a credit (reduces what's owed), sorted chronologically
-  // with a running balance so the client sees the full movement at a glance.
+  // ── Single account ledger — the only table on the invoice now.
+  // Every expense line and the VAT amount post as debits (what's owed),
+  // every payment posts as a credit (what's been paid), sorted
+  // chronologically with a running balance so the client sees the full
+  // movement — charges and payments together — at a glance.
   const ledgerEntries = [];
 
   lineItems.forEach(item => {
+    const cat = (item.category || '').trim();
     ledgerEntries.push({
       date: item.date || item.expense_date || issued_date,
       description: item.description || item.notes || item.category || 'Expense',
       debit: Number(item.amount || 0),
       credit: 0,
+      tagLabel: cat || null,
+      tagColor: cat ? colorForCategory(cat) : null,
     });
   });
 
@@ -178,11 +161,11 @@ function buildInvoiceHtml(invoice) {
     const meta = methodMeta(p.method);
     ledgerEntries.push({
       date: p.payment_date,
-      description: `Payment received — ${meta.label}${p.notes ? ` (${p.notes})` : ''}`,
+      description: `Payment received${p.notes ? ` (${p.notes})` : ''}`,
       debit: 0,
       credit: Number(p.amount_paid || 0),
-      methodLabel: meta.label,
-      methodColor: meta.color,
+      tagLabel: meta.label,
+      tagColor: meta.color,
     });
   });
 
@@ -198,13 +181,13 @@ function buildInvoiceHtml(invoice) {
   let runningBalance = 0;
   const ledgerRows = ledgerEntries.map(e => {
     runningBalance += e.debit - e.credit;
-    const methodTag = e.methodLabel
-      ? `<span class="tag" style="background:${e.methodColor}1a;color:${e.methodColor};margin-left:6px">${e.methodLabel}</span>`
+    const tag = e.tagLabel
+      ? `<span class="tag" style="background:${e.tagColor}1a;color:${e.tagColor};margin-left:6px">${e.tagLabel}</span>`
       : '';
     return `
         <tr>
           <td>${fmtDate(e.date)}</td>
-          <td>${e.description.replace(/ — .*$/, '')}${methodTag}</td>
+          <td>${e.description}${tag}</td>
           <td class="amt debit-cell">${e.debit ? fmt(e.debit) : '—'}</td>
           <td class="amt credit-cell">${e.credit ? fmt(e.credit) : '—'}</td>
           <td class="amt balance-cell">${fmt(runningBalance)}</td>
@@ -213,7 +196,8 @@ function buildInvoiceHtml(invoice) {
 
   const totalDebit  = ledgerEntries.reduce((s, e) => s + e.debit, 0);
   const totalCredit = ledgerEntries.reduce((s, e) => s + e.credit, 0);
-  const showLedger  = ledgerEntries.length > 0;
+  const amountPaid  = totalCredit;
+  const balanceDue   = Math.max(0, runningBalance);
 
   return `
   <!DOCTYPE html>
@@ -226,12 +210,43 @@ function buildInvoiceHtml(invoice) {
       body {
         font-family: 'Helvetica Neue', Arial, sans-serif;
         color: #1a1714;
-        padding: 0 56px 52px;
+        padding: 76px 56px 52px;
         font-size: 13px;
         line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
       }
 
-      .header { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 30px; }
+      .accent-bar { display: none; } /* replaced by .page-header, which repeats on every page */
+
+      .page-header {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: 60px;
+        padding: 0 56px;
+        display: flex;
+        align-items: center;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e0d8;
+        z-index: 10;
+      }
+      .page-header::before {
+        content: '';
+        position: absolute;
+        top: -6px; left: 0; right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, ${CAMP.accentColor}, #1a1712);
+      }
+      .page-header-logo { height: 28px; width: auto; object-fit: contain; }
+      .page-header-mark {
+        width: 28px; height: 28px; border-radius: 7px;
+        background: #1a1712; color: #f4f1ec;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 800; letter-spacing: -0.3px;
+      }
+      .page-header-name { margin-left: 10px; font-size: 13px; font-weight: 700; color: #1a1712; letter-spacing: -0.1px; }
+      .page-header-inv { margin-left: auto; font-size: 10.5px; color: #948c7c; letter-spacing: 0.04em; }
+
+      .header { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 30px; padding-top: 20px; }
       .logo-img { height: 80px; width: auto; object-fit: contain; margin-bottom: 14px; }
       .logo-mark {
         width: 80px; height: 80px; border-radius: 24px;
@@ -255,7 +270,8 @@ function buildInvoiceHtml(invoice) {
         text-transform: uppercase; letter-spacing: 0.08em;
         background: ${sc.bg}; color: ${sc.text}; border: 1px solid ${sc.border};
       }
-      .dates { display: flex; gap: 40px; text-align: right; }
+      .dates { display: flex; text-align: right; }
+      .date-item { margin-left: 40px; }
       .date-item div:last-child { font-weight: 600; margin-top: 2px; }
 
       .bill-to { margin-bottom: 34px; }
@@ -277,14 +293,10 @@ function buildInvoiceHtml(invoice) {
       th { text-align: left; font-size: 9px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid #e5e0d8; }
       td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid #e5e0d8; }
       .amt { text-align: right; }
-      .cat-cell { font-size: 12px; }
       .tag { display: inline-block; padding: 3px 9px; border-radius: 5px; font-size: 10.5px; font-weight: 600; }
-      .subtotal-row td { border-bottom: none; padding: 6px 0; font-size: 12.5px; color: #6b6456; }
-      .subtotal-row.vat-row td { padding-bottom: 12px; }
-      .total-row td { font-weight: 700; font-size: 17px; border-bottom: none; border-top: 2px solid #1a1712; padding-top: 16px; }
 
-      /* ── Account ledger (debit / credit / running balance) ── */
-      .ledger-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1a1712; margin-bottom: 4px; }
+      /* ── Account ledger (debit / credit / running balance) — the only table ── */
+      .ledger-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1a1712; }
       .ledger-subtitle { font-size: 10.5px; color: #948c7c; font-weight: 400; text-transform: none; letter-spacing: 0; margin-top: 2px; }
       .debit-cell { color: #b03030; font-weight: 600; }
       .credit-cell { color: #2d7a47; font-weight: 600; }
@@ -295,8 +307,21 @@ function buildInvoiceHtml(invoice) {
       .ledger-close-row.settled td { color: #2d7a47; }
       .ledger-close-row.owing td { color: #b03030; }
 
-      .payment-section { display: flex; gap: 20px; margin-top: 8px; margin-bottom: 28px; }
+      .tax-summary { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+      .tax-summary-box { width: 300px; }
+      .tax-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; color: #6b6456; }
+      .tax-row.vat-row { border-bottom: 1px solid #e5e0d8; padding-bottom: 12px; margin-bottom: 4px; }
+      .tax-row span:last-child { font-weight: 600; color: #1a1714; }
+      .tax-row.total-due-row { border-top: 2px solid #1a1712; margin-top: 6px; padding-top: 14px; }
+      .tax-row.total-due-row span { font-weight: 700; font-size: 16px; color: #1a1712; }
+      .tax-row.balance-row span { font-weight: 700; }
+      .tax-row.balance-row.settled span:last-child { color: #2d7a47; }
+      .tax-row.balance-row.owing span:last-child { color: #b03030; }
+      .vat-note { font-size: 10px; color: #b0a898; margin-top: 10px; text-align: right; }
+
+      .payment-section { display: flex; margin-top: 8px; margin-bottom: 28px; }
       .payment-box { flex: 1; padding: 18px 20px; background: #f8f6f2; border: 1px solid #e5e0d8; border-radius: 10px; }
+      .payment-box + .payment-box { margin-left: 20px; }
       .payment-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1a1712; margin-bottom: 12px; }
       .payment-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
       .payment-row span:first-child { color: #948c7c; }
@@ -305,10 +330,18 @@ function buildInvoiceHtml(invoice) {
       .notes { margin-bottom: 28px; padding: 16px 18px; background: #f8f6f2; border-radius: 8px; font-size: 12px; color: #6b6456; line-height: 1.6; }
       .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid #e5e0d8; text-align: center; }
       .footer-thanks { font-size: 12px; font-weight: 600; color: #1a1712; margin-bottom: 4px; }
+      .footer-sub { font-size: 11px; color: #948c7c; }
+      .footer-legal { font-size: 9.5px; color: #b0a898; margin-top: 10px; }
     </style>
   </head>
   <body>
-    <div class="accent-bar"></div>
+    <div class="page-header">
+      ${CAMP.logoUrl
+        ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="page-header-logo" />`
+        : `<div class="page-header-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`}
+      <span class="page-header-name">${CAMP.name}</span>
+      <span class="page-header-inv">${invoice_number}</span>
+    </div>
 
     <div class="header">
       ${logoBlock}
@@ -320,7 +353,7 @@ function buildInvoiceHtml(invoice) {
 
     <div class="meta-strip">
       <div>
-        <div class="inv-title">Invoice</div>
+        <div class="inv-title">Tax Invoice</div>
         <div class="inv-number">${invoice_number}</div>
         <div class="status-badge">${status}</div>
       </div>
@@ -345,28 +378,11 @@ function buildInvoiceHtml(invoice) {
 
     <table>
       <thead>
-        <tr><th>Date</th><th>Description</th><th>Category</th><th class="amt">Amount</th></tr>
-      </thead>
-      <tbody>${lineItemRows}
-        <tr class="subtotal-row">
-          <td colspan="3">Subtotal</td>
-          <td class="amt">${fmt(subtotal)}</td>
+        <tr>
+          <th colspan="5">
+            <span class="ledger-title">Account statement<span class="ledger-subtitle">&nbsp;— charges (debit) and payments (credit), in order</span></span>
+          </th>
         </tr>
-        <tr class="subtotal-row vat-row">
-          <td colspan="3">VAT (${(VAT_RATE * 100).toFixed(0)}%)</td>
-          <td class="amt">${fmt(vatAmount)}</td>
-        </tr>
-        <tr class="total-row">
-          <td colspan="3">Total due</td>
-          <td class="amt">${fmt(grandTotal)}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    ${showLedger ? `
-    <table>
-      <thead>
-        <tr><th colspan="5"><span class="ledger-title">Account ledger<span class="ledger-subtitle">&nbsp;— charges (debit) and payments (credit) on this account, in order</span></span></th></tr>
         <tr><th>Date</th><th>Description</th><th class="amt">Debit</th><th class="amt">Credit</th><th class="amt">Balance</th></tr>
       </thead>
       <tbody>${ledgerRows}
@@ -381,7 +397,18 @@ function buildInvoiceHtml(invoice) {
           <td class="amt">${fmt(Math.max(0, runningBalance))}</td>
         </tr>
       </tbody>
-    </table>` : ''}
+    </table>
+
+    <div class="tax-summary">
+      <div class="tax-summary-box">
+        <div class="tax-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
+        <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
+        <div class="tax-row total-due-row"><span>Total due</span><span>${fmt(grandTotal)}</span></div>
+        <div class="tax-row"><span>Amount paid</span><span>${fmt(amountPaid)}</span></div>
+        <div class="tax-row balance-row ${balanceDue <= 0 ? 'settled' : 'owing'}"><span>Balance ${balanceDue <= 0 ? 'settled' : 'due'}</span><span>${fmt(balanceDue)}</span></div>
+        <div class="vat-note">VAT registered · KRA PIN ${CAMP.kraPin}</div>
+      </div>
+    </div>
 
     <div class="payment-section">
       <div class="payment-box">
@@ -404,6 +431,7 @@ function buildInvoiceHtml(invoice) {
     <div class="footer">
       <div class="footer-thanks">Asante — thank you for training with ${CAMP.name}</div>
       <div class="footer-sub">${CAMP.website}</div>
+      <div class="footer-legal">This is a computer-generated tax invoice and does not require a signature.</div>
     </div>
   </body>
   </html>

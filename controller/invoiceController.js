@@ -6,6 +6,16 @@ const { buildInvoiceHtml } = require('../services/invoiceTemplate');
 const { generatePdfFromHtml } = require('../services/pdfService');
 const { sendInvoiceEmail } = require('../services/emailService');
 
+const UPDATABLE_INVOICE_FIELDS = ['status', 'total_amount', 'due_date', 'notes'];
+
+function pickUpdatableFields(body) {
+  const out = {};
+  for (const key of UPDATABLE_INVOICE_FIELDS) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  return out;
+}
+
 const invoiceController = {
   async getAll(req, res) {
     try {
@@ -46,8 +56,12 @@ const invoiceController = {
       if (!client_id && !visit_id) {
         return res.status(400).json({ error: 'client_id or visit_id is required' });
       }
-      if (!total_amount && !final_amount) {
+     
+      if (total_amount == null && final_amount == null) {
         return res.status(400).json({ error: 'total_amount is required' });
+      }
+      if (total_amount != null && Number.isNaN(Number(total_amount))) {
+        return res.status(400).json({ error: 'total_amount must be a number' });
       }
 
       const invoice = await InvoiceModel.create({
@@ -94,14 +108,21 @@ const invoiceController = {
       if (!visitRows.length) return res.status(404).json({ error: 'Visit not found' });
       const client_id = visitRows[0].client_id;
 
-      // Only unbilled expenses for THIS visit — not the client's other visits
-      const total_expenses = await ExpenseModel.getUnbilledByVisit(visit_id);
+      await dbClient.query('BEGIN');
+
+           const { rows: lockedExpenseRows } = await dbClient.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total
+           FROM expenses
+          WHERE visit_id = $1 AND invoice_id IS NULL
+          FOR UPDATE`,
+        [visit_id]
+      );
+      const total_expenses = parseFloat(lockedExpenseRows[0].total);
 
       if (total_expenses <= 0) {
+        await dbClient.query('ROLLBACK');
         return res.status(400).json({ error: 'No unbilled expenses for this visit' });
       }
-
-      await dbClient.query('BEGIN');
 
       const invoice = await InvoiceModel.create({
         client_id,
@@ -131,13 +152,21 @@ const invoiceController = {
       const { client_id, due_date, notes } = req.body;
       if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
-      const total_expenses = await ExpenseModel.getUnbilledByClient(client_id);
+      await dbClient.query('BEGIN');
+      const { rows: lockedExpenseRows } = await dbClient.query(
+        `SELECT COALESCE(SUM(e.amount), 0) AS total
+           FROM expenses e
+           JOIN visits v ON v.id = e.visit_id
+          WHERE v.client_id = $1 AND e.invoice_id IS NULL
+          FOR UPDATE OF e`,
+        [client_id]
+      );
+      const total_expenses = parseFloat(lockedExpenseRows[0].total);
 
       if (total_expenses <= 0) {
+        await dbClient.query('ROLLBACK');
         return res.status(400).json({ error: 'No unbilled expenses for this client' });
       }
-
-      await dbClient.query('BEGIN');
 
       const invoice = await InvoiceModel.create({
         client_id,
@@ -161,7 +190,14 @@ const invoiceController = {
 
   async update(req, res) {
     try {
-      const invoice = await InvoiceModel.update(req.params.id, req.body);
+      
+           const fields = pickUpdatableFields(req.body);
+
+      if (fields.total_amount != null && Number.isNaN(Number(fields.total_amount))) {
+        return res.status(400).json({ error: 'total_amount must be a number' });
+      }
+
+      const invoice = await InvoiceModel.update(req.params.id, fields);
       if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
       res.json(invoice);
     } catch (err) {

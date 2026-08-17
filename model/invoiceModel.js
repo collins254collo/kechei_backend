@@ -1,6 +1,6 @@
 const db = require('../config/db');
 
-const VAT_RATE = 0.16; 
+const VAT_RATE = 0.16;
 const InvoiceModel = {
 
   async getAll() {
@@ -64,7 +64,7 @@ const InvoiceModel = {
     return `INV-${year}-${seq}`;
   },
 
-   async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
+  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
     const invoice_number = await this.generateNumber();
 
     const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
@@ -94,6 +94,12 @@ const InvoiceModel = {
   },
 
   async update(id, { status, total_amount, final_amount, paid_amount, due_date, notes }) {
+    let resolvedFinal = final_amount ?? null;
+
+    if (total_amount != null && final_amount == null) {
+      resolvedFinal = Number(total_amount) * (1 + VAT_RATE);
+    }
+
     const { rows } = await db.query(
       `UPDATE invoices SET
          status       = COALESCE($1, status),
@@ -106,9 +112,9 @@ const InvoiceModel = {
        WHERE id = $7
        RETURNING *`,
       [
-        status      ?? null,
+        status       ?? null,
         total_amount ?? null,
-        final_amount ?? null,
+        resolvedFinal,
         paid_amount  ?? null,
         due_date     ?? null,
         notes        ?? null,
