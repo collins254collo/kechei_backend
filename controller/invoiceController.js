@@ -17,19 +17,26 @@ const invoiceController = {
   },
 
   async getById(req, res) {
-    try {
-      const invoice = await InvoiceModel.getById(req.params.id);
-      if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+      try {
+        const invoice = await InvoiceModel.getById(req.params.id);
+        if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
-      const payments   = await PaymentModel.getByInvoice(invoice.id);
-      const total_paid = await PaymentModel.getTotalPaid(invoice.id);
-      const balance    = parseFloat(invoice.final_amount) - total_paid;
+        const expenses   = await ExpenseModel.getByInvoice(invoice.id);
+        const payments    = await PaymentModel.getByInvoice(invoice.id);
+        const total_paid  = await PaymentModel.getTotalPaid(invoice.id);
+        const balance     = parseFloat(invoice.final_amount) - total_paid;
 
-      res.json({ ...invoice, payments, total_paid, balance });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  },
+        res.json({
+          ...invoice,
+          expenses,
+          payments: payments.slice().reverse(), 
+          total_paid,
+          balance,
+        });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    },
 
   async create(req, res) {
     try {
@@ -101,7 +108,6 @@ const invoiceController = {
         visit_id,
         total_expenses,
         total_amount: total_expenses,
-        final_amount: total_expenses,
         due_date,
         notes,
       });
@@ -136,8 +142,7 @@ const invoiceController = {
       const invoice = await InvoiceModel.create({
         client_id,
         total_expenses,
-        total_amount: total_expenses,
-        final_amount: total_expenses,
+        total_amount: total_expenses, 
         due_date,
         notes,
       });
@@ -171,7 +176,10 @@ const invoiceController = {
       const invoice = await InvoiceModel.getById(req.params.id);
       if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
-      const html = buildInvoiceHtml(invoice);
+      const expenses = await ExpenseModel.getByInvoice(invoice.id);
+      const payments = await PaymentModel.getByInvoice(invoice.id);
+
+      const html = buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
       const pdfBuffer = await generatePdfFromHtml(html);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -192,7 +200,10 @@ const invoiceController = {
         return res.status(400).json({ error: 'This client has no email on file' });
       }
 
-      const html = buildInvoiceHtml(invoice);
+      const expenses = await ExpenseModel.getByInvoice(invoice.id);
+      const payments = await PaymentModel.getByInvoice(invoice.id);
+
+      const html = buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
       const pdfBuffer = await generatePdfFromHtml(html);
       await sendInvoiceEmail({ to: invoice.email, invoice, pdfBuffer });
 
@@ -201,7 +212,7 @@ const invoiceController = {
       console.error('sendToClient failed:', err);
       res.status(500).json({ error: err.message });
     }
-},
+  },
 
   async delete(req, res) {
     try {

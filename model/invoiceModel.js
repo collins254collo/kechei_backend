@@ -1,5 +1,6 @@
 const db = require('../config/db');
 
+const VAT_RATE = 0.16; 
 const InvoiceModel = {
 
   async getAll() {
@@ -63,8 +64,13 @@ const InvoiceModel = {
     return `INV-${year}-${seq}`;
   },
 
-  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
+   async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
     const invoice_number = await this.generateNumber();
+
+    const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
+
+    const computedFinal = subtotal * (1 + VAT_RATE);
+
     const { rows } = await db.query(
       `INSERT INTO invoices
          (invoice_number, client_id, visit_id, total_services, total_expenses,
@@ -77,8 +83,8 @@ const InvoiceModel = {
         visit_id    ?? null,
         total_services,
         total_expenses,
-        total_amount  ?? final_amount ?? 0,
-        final_amount  ?? total_amount ?? 0,
+        subtotal,
+        final_amount ?? computedFinal,
         issued_date   || new Date().toISOString().split('T')[0],
         due_date      || null,
         notes         || null,
