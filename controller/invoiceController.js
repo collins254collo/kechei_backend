@@ -153,20 +153,20 @@ const invoiceController = {
       if (!client_id) return res.status(400).json({ error: 'client_id is required' });
 
       await dbClient.query('BEGIN');
-      const { rows: lockedExpenseRows } = await dbClient.query(
-        `SELECT COALESCE(SUM(e.amount), 0) AS total
-           FROM expenses e
-           JOIN visits v ON v.id = e.visit_id
-          WHERE v.client_id = $1 AND e.invoice_id IS NULL
-          FOR UPDATE OF e`,
-        [client_id]
-      );
-      const total_expenses = parseFloat(lockedExpenseRows[0].total);
+        const { rows: expenseRows } = await dbClient.query(
+          `SELECT e.id, e.amount
+            FROM expenses e
+            JOIN visits v ON v.id = e.visit_id
+            WHERE v.client_id = $1 AND e.invoice_id IS NULL
+            FOR UPDATE OF e`,
+          [client_id]
+        );
+        const total_expenses = expenseRows.reduce((sum, r) => sum + parseFloat(r.amount), 0);
 
-      if (total_expenses <= 0) {
-        await dbClient.query('ROLLBACK');
-        return res.status(400).json({ error: 'No unbilled expenses for this client' });
-      }
+        if (total_expenses <= 0) {
+          await dbClient.query('ROLLBACK');
+          return res.status(400).json({ error: 'No unbilled expenses for this client' });
+        }
 
       const invoice = await InvoiceModel.create({
         client_id,
