@@ -3,533 +3,522 @@ const path = require('path');
 
 
 function getLogoDataUri() {
- try {
- const svgPath = path.join(__dirname, '../public/kechei.svg');
- const svg = fs.readFileSync(svgPath, 'utf8');
- const base64 = Buffer.from(svg).toString('base64');
- return `data:image/svg+xml;base64,${base64}`;
- } catch (err) {
- console.error('Logo load failed, falling back to text mark:', err.message);
- return '';
- }
+  try {
+    const svgPath = path.join(__dirname, '../public/kechei.svg');
+    const svg = fs.readFileSync(svgPath, 'utf8');
+    const base64 = Buffer.from(svg).toString('base64');
+    return `data:image/svg+xml;base64,${base64}`;
+  } catch (err) {
+    console.error('Logo load failed, falling back to text mark:', err.message);
+    return '';
+  }
 }
 
 // Camp / business details
 const CAMP = {
- name: 'Kechei Centre',
- tagline: 'Iten, Kenya Home of Champions',
- address: 'Iten, Elgeyo-Marakwet County, Kenya',
- phone: '+254 7XX XXX XXX',
- email: 'billing@kechei.com',
- website: 'www.kechei.com',
- kraPin: 'PXXXXXXXXXX',
- logoUrl: getLogoDataUri(),
- accentColor: '#b0523a',
+  name: 'Kechei Centre',
+  tagline: 'Iten, Kenya — Home of Champions',
+  altitude: 'Alt. 2,400m',
+  address: 'Iten, Elgeyo-Marakwet County, Kenya',
+  phone: '+254 7XX XXX XXX',
+  email: 'billing@kechei.com',
+  website: 'www.kechei.com',
+  kraPin: 'PXXXXXXXXXX',
+  logoUrl: getLogoDataUri(),
 };
 
 const BANK = {
- bankName: 'Equity Bank Kenya',
- accountName: 'Kechei Centre Ltd',
- accountNumber: '000000000000',
- branch: 'Iten Branch',
- swiftCode: 'EQBLKENA',
+  bankName: 'Equity Bank Kenya',
+  accountName: 'Kechei Centre Ltd',
+  accountNumber: '000000000000',
+  branch: 'Iten Branch',
+  swiftCode: 'EQBLKENA',
 };
 
 const VAT_RATE = 0.16;
 
-// Human labels + colors for payment methods stored on the `payments` table.
-const PAYMENT_METHOD_META = {
- mpesa: { label: 'M-Pesa', color: '#2d7a47' },
- cash: { label: 'Cash', color: '#9a6520' },
- bank_transfer: { label: 'Bank Transfer', color: '#3a5fa0' },
- card: { label: 'Card', color: '#6a3aaa' },
- cheque: { label: 'Cheque', color: '#9a6520' },
- other: { label: 'Other', color: '#6b6456' },
+// Design tokens — palette pulled from Iten itself: red laterite trails, highland
+// forest, near-black ink. The thin tri-segment rule stands in for the Kenyan
+// flag without being literal about it.
+const TOKENS = {
+  ink: '#1c1b17',
+  inkSoft: '#6b6456',
+  inkFaint: '#b0a898',
+  paper: '#ffffff',
+  paperSoft: '#faf8f4',
+  rule: '#e5e0d8',
+  clay: '#a8462e',   // laterite trail red — used for "owing" / debit / warm accent
+  forest: '#2f4a3c', // highland green — used for "settled" / credit
+  gold: '#b8862b',   // muted gold — partial / secondary accent
 };
-const FALLBACK_METHOD_META = { label: 'Other', color: '#6b6456' };
+
+// Human labels + colors for payment methods stored on the `payments` table.
+// M-Pesa and bank blue keep their real-world associations (people recognise
+// these instantly); cash/cheque/other are tuned to sit inside the palette.
+const PAYMENT_METHOD_META = {
+  mpesa: { label: 'M-Pesa', color: '#2d7a47' },
+  cash: { label: 'Cash', color: TOKENS.gold },
+  bank_transfer: { label: 'Bank Transfer', color: '#3a5fa0' },
+  card: { label: 'Card', color: '#6a3aaa' },
+  cheque: { label: 'Cheque', color: TOKENS.gold },
+  other: { label: 'Other', color: TOKENS.inkSoft },
+};
+const FALLBACK_METHOD_META = { label: 'Other', color: TOKENS.inkSoft };
 
 function methodMeta(method) {
- const key = (method || '').toLowerCase().trim();
- return PAYMENT_METHOD_META[key] || {...FALLBACK_METHOD_META, label: method? capitalize(method): 'Other' };
+  const key = (method || '').toLowerCase().trim();
+  return PAYMENT_METHOD_META[key] || { ...FALLBACK_METHOD_META, label: method ? capitalize(method) : 'Other' };
 }
 
 function capitalize(s) {
- return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function fmt(n) {
- return `KES ${Number(n || 0).toLocaleString()}`;
+  return `KES ${Number(n || 0).toLocaleString()}`;
 }
 
 function fmtDate(d) {
- if (!d) return ' ';
- return new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function buildInvoiceHtml(invoice) {
- const {
- invoice_number, full_name, phone, email,
- total_expenses, total_amount, final_amount, paid_amount, status,
- issued_date, due_date, notes,
- expenses,
- payments,
- } = invoice;
+  const {
+    invoice_number, full_name, phone, email,
+    total_expenses, total_amount, final_amount, paid_amount, status,
+    issued_date, due_date, notes,
+    expenses,
+    payments,
+  } = invoice;
 
- const statusColors = {
- paid: { bg: '#eaf4ee', text: '#2d7a47', border: '#bfe0cc' },
- partial: { bg: '#fef4e4', text: '#9a6520', border: '#f5d9a8' },
- unpaid: { bg: '#fdeeed', text: '#b03030', border: '#f3c6c3' },
- };
+  const statusMeta = {
+    paid: { label: 'Paid', bg: '#eaf1ec', text: TOKENS.forest, border: '#c9dccf' },
+    partial: { label: 'Partial', bg: '#f7ecdb', text: TOKENS.gold, border: '#ecd7ae' },
+    unpaid: { label: 'Unpaid', bg: '#f6e7e2', text: TOKENS.clay, border: '#e8c6ba' },
+  };
 
- const sc = statusColors[status] || statusColors.unpaid;
+  const sm = statusMeta[status] || statusMeta.unpaid;
 
- const logoBlock = CAMP.logoUrl? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`: `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
+  const logoBlock = CAMP.logoUrl
+    ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
+    : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
 
- const lineItems = Array.isArray(expenses) && expenses.length? expenses: [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
+  const lineItems = Array.isArray(expenses) && expenses.length
+    ? expenses
+    : [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
 
- const hasStoredAmounts = total_amount!= null && final_amount!= null;
- const subtotal = hasStoredAmounts? Number(total_amount): lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
- const grandTotal = hasStoredAmounts? Number(final_amount): subtotal * (1 + VAT_RATE);
- const vatAmount = grandTotal - subtotal;
+  const hasStoredAmounts = total_amount != null && final_amount != null;
+  const subtotal = hasStoredAmounts ? Number(total_amount) : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const grandTotal = hasStoredAmounts ? Number(final_amount) : subtotal * (1 + VAT_RATE);
+  const vatAmount = grandTotal - subtotal;
 
- const paymentList = Array.isArray(payments)? payments: [];
+  const paymentList = Array.isArray(payments) ? payments : [];
 
- const ledgerEntries = [];
+  const ledgerEntries = [];
 
- lineItems.forEach(item => {
- ledgerEntries.push({
- date: item.date || item.expense_date || issued_date,
- description: item.description || item.notes || item.category || 'Expense',
- debit: Number(item.amount || 0),
- credit: 0,
- });
- });
-
- if (vatAmount > 0) {
- ledgerEntries.push({
- date: issued_date,
- description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`,
- debit: vatAmount,
- credit: 0,
- });
- }
-
- paymentList.forEach(p => {
-  const meta = methodMeta(p.method);
-  ledgerEntries.push({
-  date: p.payment_date,
-  description: `Payment received${p.notes? ` (${p.notes})`: ''}`,
-  debit: 0,
-  credit: Number(p.amount_paid || 0),
-  tagLabel: meta.label,
-  tagColor: meta.color,
-  });
+  lineItems.forEach(item => {
+    ledgerEntries.push({
+      date: item.date || item.expense_date || issued_date,
+      description: item.description || item.notes || item.category || 'Expense',
+      debit: Number(item.amount || 0),
+      credit: 0,
+    });
   });
 
- ledgerEntries.sort((a, b) => {
- const dA = new Date(a.date || 0).getTime();
- const dB = new Date(b.date || 0).getTime();
- if (dA!== dB) return dA - dB;
- return b.debit - a.debit;
- });
+  if (vatAmount > 0) {
+    ledgerEntries.push({
+      date: issued_date,
+      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`,
+      debit: vatAmount,
+      credit: 0,
+    });
+  }
 
- const ledgerRows = ledgerEntries.map(e => {
- return `
- <tr>
- <td>${fmtDate(e.date)}</td>
- <td>${e.description}</td>
- <td class="amt debit-cell">${e.debit? fmt(e.debit): '-'}</td>
- <td class="amt credit-cell">${e.credit? fmt(e.credit): '-'}</td>
- </tr>`;
- }).join('');
+  paymentList.forEach(p => {
+    const meta = methodMeta(p.method);
+    ledgerEntries.push({
+      date: p.payment_date,
+      description: `Payment received${p.notes ? ` (${p.notes})` : ''}`,
+      debit: 0,
+      credit: Number(p.amount_paid || 0),
+      tagLabel: meta.label,
+      tagColor: meta.color,
+    });
+  });
 
- const totalDebit = ledgerEntries.reduce((s, e) => s + e.debit, 0);
- const totalCredit = ledgerEntries.reduce((s, e) => s + e.credit, 0);
- const amountPaid = totalCredit;
- const balanceDue = Math.max(0, totalDebit - totalCredit);
+  ledgerEntries.sort((a, b) => {
+    const dA = new Date(a.date || 0).getTime();
+    const dB = new Date(b.date || 0).getTime();
+    if (dA !== dB) return dA - dB;
+    return b.debit - a.debit;
+  });
 
- // Generate QR Code with payment details
- const qrData = JSON.stringify({
- bank: BANK.bankName,
- account: BANK.accountNumber,
- name: BANK.accountName,
- ref: invoice_number,
- amount: grandTotal
- });
- const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+  const ledgerRows = ledgerEntries.map(e => {
+    return `
+      <tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>
+          ${e.description}
+          ${e.tagLabel ? `<span class="method-tag" style="color:${e.tagColor};border-color:${e.tagColor}55;background:${e.tagColor}14;">${e.tagLabel}</span>` : ''}
+        </td>
+        <td class="amt debit-cell">${e.debit ? fmt(e.debit) : '—'}</td>
+        <td class="amt credit-cell">${e.credit ? fmt(e.credit) : '—'}</td>
+      </tr>`;
+  }).join('');
 
- return `
- <!DOCTYPE html>
- <html>
- <head>
- <meta charset="utf-8" />
- <style>
- * { margin: 0; padding: 0; box-sizing: border-box; }
+  const totalDebit = ledgerEntries.reduce((s, e) => s + e.debit, 0);
+  const totalCredit = ledgerEntries.reduce((s, e) => s + e.credit, 0);
+  const amountPaid = totalCredit;
+  const balanceDue = Math.max(0, totalDebit - totalCredit);
 
- body {
- font-family: 'Helvetica Neue', Arial, sans-serif;
- color: #1a1714;
- padding: 76px 56px 52px;
- font-size: 13px;
- line-height: 1.5;
- -webkit-font-smoothing: antialiased;
- background: #ffffff;
- }
+  // Generate QR Code with payment details
+  const qrData = JSON.stringify({
+    bank: BANK.bankName,
+    account: BANK.accountNumber,
+    name: BANK.accountName,
+    ref: invoice_number,
+    amount: grandTotal,
+  });
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
 
- .page-header {
- position: fixed;
- top: 0; left: 0; right: 0;
- height: 60px;
- padding: 0 56px;
- display: flex;
- align-items: center;
- background: #ffffff;
- border-bottom: 1px solid #e5e0d8;
- z-index: 10;
- }
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
- .page-header::before {
- content: '';
- position: absolute;
- top: -6px; left: 0; right: 0;
- height: 6px;
- background: linear-gradient(90deg, ${CAMP.accentColor}, #1a1712);
- }
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
- .page-header-logo { height: 28px; width: auto; object-fit: contain; }
- .page-header-mark {
- width: 28px; height: 28px; border-radius: 7px;
- background: #1a1712; color: #f4f1ec;
- display: flex; align-items: center; justify-content: center;
- font-size: 11px; font-weight: 800; letter-spacing: -0.3px;
- }
- .page-header-name { margin-left: 10px; font-size: 13px; font-weight: 700; color: #1a1712; letter-spacing: -0.1px; }
- .page-header-inv { margin-left: auto; font-size: 10.5px; color: #948c7c; letter-spacing: 0.04em; }
+  body {
+    font-family: roboto;
+    color: ${TOKENS.ink};
+    padding: 44px 56px 52px;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    background: ${TOKENS.paper};
+    font-variant-numeric: tabular-nums;
+  }
 
- .header { 
- display: flex; 
- flex-direction: column; 
- align-items: center; 
- text-align: center; 
- margin-bottom: 30px; 
- padding-top: 20px; 
- }
- 
- .logo-img { height: 80px; width: auto; object-fit: contain; margin-bottom: 14px; }
- .logo-mark {
- width: 80px; height: 80px; border-radius: 24px;
- background: #1a1712; color: #f4f1ec;
- display: flex; align-items: center; justify-content: center;
- font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
- margin-bottom: 14px;
- }
- .brand-name { font-size: 23px; font-weight: 800; letter-spacing: -0.3px; }
- .brand-sub { font-size: 10.5px; color: #6b6456; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 5px; }
- .brand-contact { font-size: 11px; color: #948c7c; margin-top: 10px; line-height: 1.7; }
- .header-divider { width: 100%; border-bottom: 2px solid #1a1712; margin-top: 26px; padding-bottom: 22px; }
+  /* Signature element: a hairline in three segments, a quiet nod to place
+     rather than a literal flag. Bleeds edge-to-edge past the body padding. */
+  .top-rule {
+    display: flex;
+    height: 4px;
+    margin: 0 -56px 40px;
+  }
+  .top-rule span { flex: 1; }
+  .top-rule span:nth-child(1) { background: ${TOKENS.ink}; }
+  .top-rule span:nth-child(2) { background: ${TOKENS.clay}; }
+  .top-rule span:nth-child(3) { background: ${TOKENS.forest}; }
 
- .meta-strip { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 34px; }
- .label { font-size: 12px; color: #1a1711; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
- .inv-title { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #b0a898; margin-bottom: 6px; }
- .inv-number { font-size: 16px; font-weight: 700; color: #1a1712; letter-spacing: 0.02em; }
- .status-badge {
- display: inline-block; margin-top: 10px; padding: 5px 14px;
- border-radius: 6px; font-size: 10.5px; font-weight: 700;
- text-transform: uppercase; letter-spacing: 0.08em;
- background: ${sc.bg}; color: ${sc.text}; border: 1px solid ${sc.border};
- }
- .dates { display: flex; text-align: right; }
- .date-item { margin-left: 40px; }
- .date-item div:last-child { font-weight: 600; margin-top: 2px; }
+  .header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 8px;
+  }
 
- .bill-to { margin-bottom: 34px; }
- .client-name { font-size: 15px; font-weight: 600; }
- .client-detail { font-size: 12px; color: #6b6456; margin-top: 2px; }
+  .logo-img { height: 64px; width: auto; object-fit: contain; margin-bottom: 16px; }
+  .logo-mark {
+    width: 64px; height: 64px; border-radius: 18px;
+    background: ${TOKENS.ink}; color: ${TOKENS.paperSoft};
+    display: flex; align-items: center; justify-content: center;
+    font-family: roboto, sans-serif; text-transform: uppercase;
+    font-size: 18px; font-weight: 700; letter-spacing: -0.3px;
+    margin-bottom: 16px;
+  }
 
- table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
- th { text-align: left; font-size: 9px; color: #b0a898; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid #e5e0d8; }
- td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid #e5e0d8; }
- .amt { text-align: right; }
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: ${TOKENS.clay};
+    margin-bottom: 10px;
+  }
 
- .ledger-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1a1712; }
- .ledger-subtitle { font-size: 10.5px; color: #948c7c; font-weight: 400; text-transform: none; letter-spacing: 0; margin-top: 2px; }
- .debit-cell { color: #b03030; font-weight: 600; }
- .credit-cell { color: #2d7a47; font-weight: 600; }
- .ledger-totals-row td { font-size: 12.5px; color: #6b6456; border-bottom: none; padding-top: 10px; }
+  .brand-name {
+    font-family: roboto, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .brand-sub { font-size: 11px; color: ${TOKENS.inkSoft}; letter-spacing: 0.05em; margin-top: 6px; }
+  .brand-contact { font-size: 11px; color: ${TOKENS.inkFaint}; margin-top: 14px; }
+  .brand-contact span { margin: 0 2px; }
+  .brand-contact .sep { color: ${TOKENS.rule}; }
+  .brand-contact .pin { display: block; margin-top: 4px; letter-spacing: 0.03em; }
 
- .tax-summary { display: flex; justify-content: flex-end; margin-bottom: 28px; }
- .tax-summary-box { width: 300px; }
- .tax-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; color: #6b6456; }
- .tax-row.vat-row { border-bottom: 1px solid #e5e0d8; padding-bottom: 12px; margin-bottom: 4px; }
- .tax-row span:last-child { font-weight: 600; color: #1a1714; }
- .tax-row.total-due-row { border-top: 2px solid #1a1712; margin-top: 6px; padding-top: 14px; }
- .tax-row.total-due-row span { font-weight: 700; font-size: 16px; color: #1a1712; }
- .tax-row.balance-row span { font-weight: 700; }
- .tax-row.balance-row.settled span:last-child { color: #2d7a47; }
- .tax-row.balance-row.owing span:last-child { color: #b03030; }
- .vat-note { font-size: 10px; color: #b0a898; margin-top: 10px; text-align: right; }
+  .header-divider { width: 100%; border-bottom: 1px solid ${TOKENS.rule}; margin-top: 26px; padding-bottom: 30px; }
 
- /* Payment Section - Two Column Layout with proper containment */
- .payment-wrapper {
- margin-top: 8px;
- margin-bottom: 28px;
- border: 1px solid #e5e0d8;
- border-radius: 10px;
- background: #f8f6f2;
- overflow: hidden;
- }
+  .meta-strip { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 34px; }
+  .label { font-size: 10px; color: ${TOKENS.inkFaint}; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+  .inv-title { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${TOKENS.inkFaint}; margin-bottom: 6px; }
+  .inv-number {
+    font-family: roboto, sans-serif;
+    font-size: 19px; font-weight: 700; color: ${TOKENS.ink}; letter-spacing: 0.01em;
+  }
+  .status-badge {
+    display: inline-block; margin-top: 12px; padding: 5px 14px;
+    border-radius: 5px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    background: ${sm.bg}; color: ${sm.text}; border: 1px solid ${sm.border};
+  }
+  .dates { display: flex; text-align: right; }
+  .date-item { margin-left: 40px; }
+  .date-item div:last-child { font-weight: 600; margin-top: 3px; }
 
- .payment-section {
- display: flex;
- gap: 0;
- align-items: stretch;
- }
+  .bill-to { margin-bottom: 34px; }
+  .client-name { font-size: 15px; font-weight: 600; }
+  .client-detail { font-size: 12px; color: ${TOKENS.inkSoft}; margin-top: 2px; }
 
- .bank-details-column {
- flex: 1;
- padding: 24px 28px;
- background: #f8f6f2;
- }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+  th { text-align: left; font-size: 9px; color: ${TOKENS.inkFaint}; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid ${TOKENS.rule}; }
+  td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid ${TOKENS.rule}; vertical-align: top; }
+  .amt { text-align: right; white-space: nowrap; }
 
- .qr-code-column {
- flex: 0 0 240px;
- padding: 20px;
- background: #ffffff;
- border-left: 1px solid #e5e0d8;
- display: flex;
- flex-direction: column;
- align-items: center;
- justify-content: center;
- }
+  .ledger-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${TOKENS.ink}; }
+  .ledger-subtitle { font-size: 10.5px; color: ${TOKENS.inkFaint}; font-weight: 400; text-transform: none; letter-spacing: 0; margin-top: 2px; }
+  .debit-cell { color: ${TOKENS.clay}; font-weight: 600; }
+  .credit-cell { color: ${TOKENS.forest}; font-weight: 600; }
+  .ledger-totals-row td { font-size: 12.5px; color: ${TOKENS.inkSoft}; border-bottom: none; padding-top: 12px; }
 
- .payment-title {
- font-size: 10px;
- font-weight: 700;
- letter-spacing: 0.1em;
- text-transform: uppercase;
- color: #1a1712;
- margin-bottom: 16px;
- padding-bottom: 10px;
- border-bottom: 2px solid #e5e0d8;
- }
+  .method-tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid;
+    vertical-align: middle;
+  }
 
- .bank-detail-row {
- display: flex;
- justify-content: space-between;
- padding: 10px 0;
- font-size: 12.5px;
- border-bottom: 1px solid #f0ede8;
- }
+  .tax-summary { display: flex; justify-content: flex-end; margin-bottom: 28px; }
+  .tax-summary-box { width: 300px; }
+  .tax-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; color: ${TOKENS.inkSoft}; }
+  .tax-row.vat-row { border-bottom: 1px solid ${TOKENS.rule}; padding-bottom: 12px; margin-bottom: 4px; }
+  .tax-row span:last-child { font-weight: 600; color: ${TOKENS.ink}; }
+  .tax-row.total-due-row { border-top: 2px solid ${TOKENS.ink}; margin-top: 6px; padding-top: 14px; }
+  .tax-row.total-due-row span:first-child { font-family: roboto, sans-serif; font-size: 13px; }
+  .tax-row.total-due-row span:last-child {
+    font-family: roboto, sans-serif;
+    font-weight: 700; font-size: 19px; color: ${TOKENS.ink};
+  }
+  .tax-row.balance-row span { font-weight: 700; }
+  .tax-row.balance-row.settled span:last-child { color: ${TOKENS.forest}; }
+  .tax-row.balance-row.owing span:last-child { color: ${TOKENS.clay}; }
+  .vat-note { font-size: 10px; color: ${TOKENS.inkFaint}; margin-top: 10px; text-align: right; }
 
- .bank-detail-row:last-child {
- border-bottom: none;
- }
+  /* Payment section — two-column card, table-safe spacing, break-safe as a unit */
+  .payment-wrapper {
+    margin-top: 8px;
+    margin-bottom: 28px;
+    border: 1px solid ${TOKENS.rule};
+    border-radius: 10px;
+    background: ${TOKENS.paperSoft};
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
 
- .bank-detail-label {
- color: #948c7c;
- font-weight: 500;
- letter-spacing: 0.02em;
- }
+  .payment-section {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+  }
 
- .bank-detail-value {
- font-weight: 600;
- color: #1a1714;
- text-align: right;
- }
+  .bank-details-column {
+    flex: 1;
+    padding: 24px 28px;
+    background: ${TOKENS.paperSoft};
+  }
 
- .qr-code-image {
- width: 180px;
- height: 180px;
- object-fit: contain;
- margin-bottom: 12px;
- }
+  .qr-code-column {
+    flex: 0 0 220px;
+    padding: 20px;
+    background: ${TOKENS.paper};
+    border-left: 1px solid ${TOKENS.rule};
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
 
- .qr-code-label {
- font-size: 10px;
- color: #948c7c;
- letter-spacing: 0.08em;
- text-transform: uppercase;
- text-align: center;
- }
+  .payment-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: ${TOKENS.ink};
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid ${TOKENS.rule};
+  }
 
- .qr-code-amount {
- font-size: 16px;
- font-weight: 700;
- color: #1a1712;
- margin-top: 4px;
- }
+  .bank-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    font-size: 12.5px;
+    border-bottom: 1px solid #efe9e0;
+  }
+  .bank-detail-row:last-child { border-bottom: none; }
+  .bank-detail-label { color: ${TOKENS.inkFaint}; font-weight: 500; letter-spacing: 0.02em; }
+  .bank-detail-value { font-weight: 600; color: ${TOKENS.ink}; text-align: right; }
 
- .notes { margin-bottom: 28px; padding: 16px 18px; background: #f8f6f2; border-radius: 8px; font-size: 12px; color: #6b6456; line-height: 1.6; }
+  .qr-code-image { width: 160px; height: 160px; object-fit: contain; margin-bottom: 12px; }
+  .qr-code-label { font-size: 9.5px; color: ${TOKENS.inkFaint}; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
+  .qr-code-amount { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif; font-size: 15px; font-weight: 700; color: ${TOKENS.ink}; margin-top: 4px; }
 
- .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid #e5e0d8; text-align: center; }
- .footer-thanks { font-size: 12px; font-weight: 600; color: #1a1712; margin-bottom: 4px; }
- .footer-sub { font-size: 11px; color: #948c7c; }
- .footer-legal { font-size: 9.5px; color: #b0a898; margin-top: 10px; }
+  .notes { margin-bottom: 28px; padding: 16px 18px; background: ${TOKENS.paperSoft}; border-radius: 8px; font-size: 12px; color: ${TOKENS.inkSoft}; line-height: 1.6; }
+  .notes strong { color: ${TOKENS.ink}; }
 
- @media print {
- body { padding: 60px 40px 40px; }
- .page-header { padding: 0 40px; }
- .payment-section { page-break-inside: avoid; }
- }
+  .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
+  .footer-thanks { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif; font-size: 13px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
+  .footer-sub { font-size: 11px; color: ${TOKENS.inkFaint}; }
+  .footer-legal { font-size: 9.5px; color: ${TOKENS.inkFaint}; margin-top: 10px; }
 
- @media (max-width: 700px) {
- .payment-section {
- flex-direction: column;
- }
- .qr-code-column {
- flex: none;
- width: 100%;
- border-left: none;
- border-top: 1px solid #e5e0d8;
- padding: 30px;
- }
- .qr-code-image {
- width: 160px;
- height: 160px;
- }
- .meta-strip {
- flex-direction: column;
- align-items: flex-start;
- gap: 16px;
- }
- .dates {
- width: 100%;
- justify-content: flex-start;
- }
- .date-item:first-child {
- margin-left: 0;
- }
- }
- </style>
- </head>
- <body>
- <div class="page-header">
- ${CAMP.logoUrl? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="page-header-logo" />`: `<div class="page-header-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`}
- <span class="page-header-name">${CAMP.name}</span>
- <span class="page-header-inv">${invoice_number}</span>
- </div>
+  @media print {
+    .payment-wrapper { page-break-inside: avoid; }
+  }
 
- <div class="header">
- ${logoBlock}
- <div class="brand-name">${CAMP.name}</div>
- <div class="brand-sub">${CAMP.tagline}</div>
- <div class="brand-contact">${CAMP.address} ${CAMP.phone} ${CAMP.email}<br/>KRA PIN: ${CAMP.kraPin}</div>
- <div class="header-divider"></div>
- </div>
+  @media (max-width: 700px) {
+    .payment-section { flex-direction: column; }
+    .qr-code-column {
+      flex: none; width: 100%;
+      border-left: none; border-top: 1px solid ${TOKENS.rule};
+      padding: 26px;
+    }
+    .meta-strip { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .dates { width: 100%; justify-content: flex-start; }
+    .date-item:first-child { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
 
- <div class="meta-strip">
- <div>
- <div class="inv-title">Tax Invoice</div>
- <div class="inv-number">${invoice_number}</div>
- <div class="status-badge">${status}</div>
- </div>
- <div class="dates">
- <div class="date-item">
- <div class="label">Issued</div>
- <div>${fmtDate(issued_date)}</div>
- </div>
- <div class="date-item">
- <div class="label">Due</div>
- <div>${due_date? fmtDate(due_date): ' '}</div>
- </div>
- </div>
- </div>
+  <div class="top-rule"><span></span><span></span><span></span></div>
 
- <div class="bill-to">
- <div class="label">Billed to</div>
- <div class="client-name">${full_name || ' '}</div>
- ${phone? `<div class="client-detail">${phone}</div>`: ''}
- ${email? `<div class="client-detail">${email}</div>`: ''}
- </div>
+  <div class="header">
+    ${logoBlock}
+    <div class="eyebrow">${CAMP.address.split(',')[0]}, Kenya &nbsp;·&nbsp; ${CAMP.altitude}</div>
+    <div class="brand-name">${CAMP.name}</div>
+    <div class="brand-sub">${CAMP.tagline}</div>
+    <div class="brand-contact">
+      <span>${CAMP.address}</span>
+      <span class="sep">·</span>
+      <span>${CAMP.phone}</span>
+      <span class="sep">·</span>
+      <span>${CAMP.email}</span>
+      <span class="pin">KRA PIN: ${CAMP.kraPin}</span>
+    </div>
+    <div class="header-divider"></div>
+  </div>
 
- <table>
- <thead>
- <tr>
- <th colspan="4">
- <span class="ledger-title">Account Statement</span>
- <span class="ledger-subtitle">— Charges (Debit) and Payments (Credit)</span>
- </th>
- </tr>
- <tr>
- <th style="width:20%">Date</th>
- <th style="width:45%">Description</th>
- <th style="width:17.5%" class="amt">Debit (KES)</th>
- <th style="width:17.5%" class="amt">Credit (KES)</th>
- </tr>
- </thead>
- <tbody>
- ${ledgerRows}
- <tr class="ledger-totals-row">
- <td colspan="2" style="font-weight:700;">Totals</td>
- <td class="amt debit-cell" style="font-weight:700;">${fmt(totalDebit)}</td>
- <td class="amt credit-cell" style="font-weight:700;">${fmt(totalCredit)}</td>
- </tr>
- </tbody>
- </table>
+  <div class="meta-strip">
+    <div>
+      <div class="inv-title">Tax Invoice</div>
+      <div class="inv-number">${invoice_number}</div>
+      <div class="status-badge">${sm.label}</div>
+    </div>
+    <div class="dates">
+      <div class="date-item">
+        <div class="label">Issued</div>
+        <div>${fmtDate(issued_date)}</div>
+      </div>
+      <div class="date-item">
+        <div class="label">Due</div>
+        <div>${due_date ? fmtDate(due_date) : '—'}</div>
+      </div>
+    </div>
+  </div>
 
- <div class="tax-summary">
- <div class="tax-summary-box">
- <div class="tax-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
- <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
- <div class="tax-row total-due-row"><span>Total Due</span><span>${fmt(grandTotal)}</span></div>
- <div class="tax-row"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
- <div class="tax-row balance-row ${balanceDue <= 0? 'settled': 'owing'}">
- <span>${balanceDue <= 0? 'Balance Settled' : 'Balance Due'}</span>
- <span>${fmt(balanceDue)}</span>
- </div>
- <div class="vat-note">VAT Registered — KRA PIN: ${CAMP.kraPin}</div>
- </div>
- </div>
+  <div class="bill-to">
+    <div class="label">Billed to</div>
+    <div class="client-name">${full_name || '—'}</div>
+    ${phone ? `<div class="client-detail">${phone}</div>` : ''}
+    ${email ? `<div class="client-detail">${email}</div>` : ''}
+  </div>
 
- <!-- Payment Section with proper containment -->
- <div class="payment-wrapper">
- <div class="payment-section">
- <div class="bank-details-column">
- <div class="payment-title">Bank Transfer Details</div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Bank Name</span>
- <span class="bank-detail-value">${BANK.bankName}</span>
- </div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Account Name</span>
- <span class="bank-detail-value">${BANK.accountName}</span>
- </div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Account Number</span>
- <span class="bank-detail-value">${BANK.accountNumber}</span>
- </div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Branch</span>
- <span class="bank-detail-value">${BANK.branch}</span>
- </div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Swift Code</span>
- <span class="bank-detail-value">${BANK.swiftCode}</span>
- </div>
- <div class="bank-detail-row">
- <span class="bank-detail-label">Reference</span>
- <span class="bank-detail-value">${invoice_number}</span>
- </div>
- </div>
+  <table>
+    <thead>
+      <tr>
+        <th colspan="4">
+          <span class="ledger-title">Account Statement</span>
+        </th>
+      </tr>
+      <tr>
+        <th style="width:20%">Date</th>
+        <th style="width:45%">Description</th>
+        <th style="width:17.5%" class="amt">Debit (KES)</th>
+        <th style="width:17.5%" class="amt">Credit (KES)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ledgerRows}
+      <tr class="ledger-totals-row">
+        <td colspan="2" style="font-weight:700;">Totals</td>
+        <td class="amt debit-cell" style="font-weight:700;">${fmt(totalDebit)}</td>
+        <td class="amt credit-cell" style="font-weight:700;">${fmt(totalCredit)}</td>
+      </tr>
+    </tbody>
+  </table>
 
- <div class="qr-code-column">
- <img src="${qrCodeUrl}" alt="Payment QR Code" class="qr-code-image" />
- <div class="qr-code-label">Scan to Pay</div>
- <div class="qr-code-amount">${fmt(grandTotal)}</div>
- </div>
- </div>
- </div>
+  <div class="tax-summary">
+    <div class="tax-summary-box">
+      <div class="tax-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
+      <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
+      <div class="tax-row total-due-row"><span>Total Due</span><span>${fmt(grandTotal)}</span></div>
+      <div class="tax-row"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
+      <div class="tax-row balance-row ${balanceDue <= 0 ? 'settled' : 'owing'}">
+        <span>${balanceDue <= 0 ? 'Balance Settled' : 'Balance Due'}</span>
+        <span>${fmt(balanceDue)}</span>
+      </div>
+      <div class="vat-note">VAT Registered — KRA PIN: ${CAMP.kraPin}</div>
+    </div>
+  </div>
 
- ${notes? `<div class="notes"><strong>Notes:</strong><br/>${notes}</div>`: ''}
+  <div class="payment-wrapper">
+    <div class="payment-section">
+      <div class="bank-details-column">
+        <div class="payment-title">Bank Transfer Details</div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Bank Name</span><span class="bank-detail-value">${BANK.bankName}</span></div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Account Name</span><span class="bank-detail-value">${BANK.accountName}</span></div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Account Number</span><span class="bank-detail-value">${BANK.accountNumber}</span></div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Branch</span><span class="bank-detail-value">${BANK.branch}</span></div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Swift Code</span><span class="bank-detail-value">${BANK.swiftCode}</span></div>
+        <div class="bank-detail-row"><span class="bank-detail-label">Reference</span><span class="bank-detail-value">${invoice_number}</span></div>
+      </div>
+      <div class="qr-code-column">
+        <img src="${qrCodeUrl}" alt="Payment QR Code" class="qr-code-image" />
+        <div class="qr-code-label">Scan to Pay</div>
+        <div class="qr-code-amount">${fmt(grandTotal)}</div>
+      </div>
+    </div>
+  </div>
 
- <div class="footer">
- <div class="footer-thanks">Asante — Thank you for training with ${CAMP.name}</div>
- <div class="footer-sub">${CAMP.website}</div>
- <div class="footer-legal">This is a computer-generated tax invoice and does not require a signature.</div>
- </div>
- </body>
- </html>
- `;
+  ${notes ? `<div class="notes"><strong>Notes:</strong><br/>${notes}</div>` : ''}
+
+  <div class="footer">
+    <div class="footer-thanks">Asante — Thank you for training with ${CAMP.name}</div>
+    <div class="footer-sub">${CAMP.website}</div>
+    <div class="footer-legal">This is a computer-generated tax invoice and does not require a signature.</div>
+  </div>
+
+</body>
+</html>
+  `;
 }
 
 module.exports = { buildInvoiceHtml };
