@@ -15,6 +15,7 @@ const InvoiceModel = {
          i.total_amount,
          i.final_amount,
          i.paid_amount,
+         i.description,
          i.status,
          i.issued_date,
          i.due_date,
@@ -57,14 +58,13 @@ const InvoiceModel = {
   },
 
   async generateNumber() {
-    // Uses existing sequence already in your DB
     const { rows } = await db.query(`SELECT nextval('invoice_number_seq') AS seq`);
     const year = new Date().getFullYear();
     const seq  = String(rows[0].seq).padStart(4, '0');
     return `INV-${year}-${seq}`;
   },
 
-  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, issued_date, due_date, notes }) {
+  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date, notes }) {
     const invoice_number = await this.generateNumber();
 
     const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
@@ -74,8 +74,8 @@ const InvoiceModel = {
     const { rows } = await db.query(
       `INSERT INTO invoices
          (invoice_number, client_id, visit_id, total_services, total_expenses,
-          total_amount, final_amount, status, issued_date, due_date, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'unpaid',$8,$9,$10)
+          total_amount, final_amount, description, status, issued_date, due_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'unpaid',$9,$10,$11)
        RETURNING *`,
       [
         invoice_number,
@@ -85,6 +85,7 @@ const InvoiceModel = {
         total_expenses,
         subtotal,
         final_amount ?? computedFinal,
+        description  ?? null,
         issued_date   || new Date().toISOString().split('T')[0],
         due_date      || null,
         notes         || null,

@@ -37,9 +37,6 @@ const BANK = {
 
 const VAT_RATE = 0.16;
 
-// Design tokens — palette pulled from Iten itself: red laterite trails, highland
-// forest, near-black ink. The thin tri-segment rule stands in for the Kenyan
-// flag without being literal about it.
 const TOKENS = {
   ink: '#1c1b17',
   inkSoft: '#6b6456',
@@ -47,13 +44,12 @@ const TOKENS = {
   paper: '#ffffff',
   paperSoft: '#faf8f4',
   rule: '#e5e0d8',
-  clay: '#a8462e',   // laterite trail red — used for "owing" / debit / warm accent
-  forest: '#2f4a3c', // highland green — used for "settled" / credit
-  gold: '#b8862b',   // muted gold — partial / secondary accent
+  clay: '#a8462e',   
+  forest: '#2f4a3c', 
+  gold: '#b8862b',  
 };
 
 // Human labels + colors for payment methods stored on the `payments` table.
-// M-Pesa and bank blue keep their real-world associations (people recognise
 // these instantly); cash/cheque/other are tuned to sit inside the palette.
 const PAYMENT_METHOD_META = {
   mpesa: { label: 'M-Pesa', color: '#2d7a47' },
@@ -379,13 +375,13 @@ function buildInvoiceHtml(invoice) {
 
   .qr-code-image { width: 160px; height: 160px; object-fit: contain; margin-bottom: 12px; }
   .qr-code-label { font-size: 9.5px; color: ${TOKENS.inkFaint}; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
-  .qr-code-amount { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif; font-size: 15px; font-weight: 700; color: ${TOKENS.ink}; margin-top: 4px; }
+  .qr-code-amount { font-family: roboto; font-size: 15px; font-weight: 700; color: ${TOKENS.ink}; margin-top: 4px; }
 
   .notes { margin-bottom: 28px; padding: 16px 18px; background: ${TOKENS.paperSoft}; border-radius: 8px; font-size: 12px; color: ${TOKENS.inkSoft}; line-height: 1.6; }
   .notes strong { color: ${TOKENS.ink}; }
 
   .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
-  .footer-thanks { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif; font-size: 13px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
+  .footer-thanks { font-family: roboto; font-size: 13px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
   .footer-sub { font-size: 11px; color: ${TOKENS.inkFaint}; }
   .footer-legal { font-size: 9.5px; color: ${TOKENS.inkFaint}; margin-top: 10px; }
 
