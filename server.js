@@ -16,7 +16,6 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(helmet());
 
-console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
 
 // Routes
 app.use('/api/auth',      require('./routes/authRoutes'));
