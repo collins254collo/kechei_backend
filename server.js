@@ -9,12 +9,14 @@ app.use(express.json());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN ,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(morgan('dev'));
 app.use(helmet());
+
+console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
 
 // Routes
 app.use('/api/auth',      require('./routes/authRoutes'));
