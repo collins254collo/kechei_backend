@@ -21,21 +21,23 @@ const CAMP = {
   altitude: 'Alt. 2,400m',
   address: 'Iten, Elgeyo-Marakwet County, Kenya',
   phone: '+254 7XX XXX XXX',
-  email: 'billing@kechei.com',
+  email: process.env.RESEND_EMAIL,
   website: 'www.kechei.com',
-  kraPin: 'PXXXXXXXXXX',
+  kraPin: process.env.CAMP_KRA_PIN || 'P0XXXXXXXXX', 
   logoUrl: getLogoDataUri(),
 };
 
 const BANK = {
-  bankName: 'Equity Bank Kenya',
-  accountName: 'Kechei Centre Ltd',
-  accountNumber: '000000000000',
+  bankName: 'Kenya Commercial Bank (KCB)',
+  accountName: 'KECHEI&#8217S GROUP',
+  accountNumber: '1337075159',
   branch: 'Iten Branch',
-  swiftCode: 'EQBLKENA',
+  swiftCode: 'KCBLKENX',
 };
 
+// Statutory rates
 const VAT_RATE = 0.16;
+const TOURISM_LEVY_RATE = 0.02;
 
 const TOKENS = {
   ink: '#1c1b17',
@@ -44,13 +46,12 @@ const TOKENS = {
   paper: '#ffffff',
   paperSoft: '#faf8f4',
   rule: '#e5e0d8',
-  clay: '#a8462e',   
-  forest: '#2f4a3c', 
-  gold: '#b8862b',  
+  clay: '#a8462e',
+  forest: '#2f4a3c',
+  gold: '#b8862b',
 };
 
 // Human labels + colors for payment methods stored on the `payments` table.
-// these instantly); cash/cheque/other are tuned to sit inside the palette.
 const PAYMENT_METHOD_META = {
   mpesa: { label: 'M-Pesa', color: '#2d7a47' },
   cash: { label: 'Cash', color: TOKENS.gold },
@@ -104,10 +105,23 @@ function buildInvoiceHtml(invoice) {
     ? expenses
     : [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
 
+  //  Tax computation 
+  // Order: subtotal -> + Tourism Levy (2%) -> + VAT (16% on subtotal+levy) -> grand total
   const hasStoredAmounts = total_amount != null && final_amount != null;
-  const subtotal = hasStoredAmounts ? Number(total_amount) : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const grandTotal = hasStoredAmounts ? Number(final_amount) : subtotal * (1 + VAT_RATE);
-  const vatAmount = grandTotal - subtotal;
+
+  const subtotal = hasStoredAmounts
+    ? Number(total_amount)
+    : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  const tourismLevy = subtotal * TOURISM_LEVY_RATE;
+
+  const grandTotal = hasStoredAmounts
+    ? Number(final_amount)
+    : (subtotal + tourismLevy) * (1 + VAT_RATE);
+
+  const vatAmount = hasStoredAmounts
+    ? grandTotal - subtotal - tourismLevy
+    : (subtotal + tourismLevy) * VAT_RATE;
 
   const paymentList = Array.isArray(payments) ? payments : [];
 
@@ -121,6 +135,15 @@ function buildInvoiceHtml(invoice) {
       credit: 0,
     });
   });
+
+  if (tourismLevy > 0) {
+    ledgerEntries.push({
+      date: issued_date,
+      description: `Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%)`,
+      debit: tourismLevy,
+      credit: 0,
+    });
+  }
 
   if (vatAmount > 0) {
     ledgerEntries.push({
@@ -234,7 +257,7 @@ function buildInvoiceHtml(invoice) {
 
   .eyebrow {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: ${TOKENS.clay};
@@ -244,7 +267,7 @@ function buildInvoiceHtml(invoice) {
   .brand-name {
     font-family: roboto, sans-serif;
     font-size: 26px;
-    font-weight: 700;
+    font-weight: 900;
     letter-spacing: -0.2px;
   }
   .brand-sub { font-size: 11px; color: ${TOKENS.inkSoft}; letter-spacing: 0.05em; margin-top: 6px; }
@@ -260,17 +283,17 @@ function buildInvoiceHtml(invoice) {
   .inv-title { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${TOKENS.inkFaint}; margin-bottom: 6px; }
   .inv-number {
     font-family: roboto, sans-serif;
-    font-size: 19px; font-weight: 700; color: ${TOKENS.ink}; letter-spacing: 0.01em;
+    font-size: 19px; font-weight: 900; color: ${TOKENS.ink}; letter-spacing: 0.01em;
   }
   .status-badge {
     display: inline-block; margin-top: 12px; padding: 5px 14px;
-    border-radius: 5px; font-size: 10px; font-weight: 700;
+    border-radius: 5px; font-size: 10px; font-weight: 900;
     text-transform: uppercase; letter-spacing: 0.08em;
     background: ${sm.bg}; color: ${sm.text}; border: 1px solid ${sm.border};
   }
   .dates { display: flex; text-align: right; }
   .date-item { margin-left: 40px; }
-  .date-item div:last-child { font-weight: 600; margin-top: 3px; }
+  .date-item div:last-child { font-weight: 900; margin-top: 3px; }
 
   .bill-to { margin-bottom: 34px; }
   .client-name { font-size: 15px; font-weight: 600; }
@@ -474,6 +497,7 @@ function buildInvoiceHtml(invoice) {
   <div class="tax-summary">
     <div class="tax-summary-box">
       <div class="tax-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
+      <div class="tax-row"><span>Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%)</span><span>${fmt(tourismLevy)}</span></div>
       <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
       <div class="tax-row total-due-row"><span>Total Due</span><span>${fmt(grandTotal)}</span></div>
       <div class="tax-row"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
@@ -481,7 +505,7 @@ function buildInvoiceHtml(invoice) {
         <span>${balanceDue <= 0 ? 'Balance Settled' : 'Balance Due'}</span>
         <span>${fmt(balanceDue)}</span>
       </div>
-      <div class="vat-note">VAT Registered — KRA PIN: ${CAMP.kraPin}</div>
+      <div class="vat-note">VAT &amp; Tourism Levy Registered — KRA PIN: ${CAMP.kraPin}</div>
     </div>
   </div>
 
