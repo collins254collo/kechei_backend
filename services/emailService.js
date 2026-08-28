@@ -27,7 +27,7 @@ async function sendInvoiceEmail({ to, invoice, pdfBuffer }) {
   const buffer = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
 
   const { data, error } = await resend.emails.send({
-    from: process.env.RESEND_EMAIL,
+    from: `Kechei Training Camp <${process.env.RESEND_EMAIL}>`,
     to,
     subject: `Invoice ${invoice.invoice_number} from Kechei Training Camp`,
     html: buildInvoiceEmailHtml(invoice),
