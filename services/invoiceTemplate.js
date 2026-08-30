@@ -82,7 +82,7 @@ function fmtDate(d) {
 }
 
 function buildInvoiceHtml(invoice) {
- const {
+  const {
     invoice_number, full_name, phone, email,
     total_expenses, total_amount, final_amount, paid_amount, status,
     issued_date, due_date, notes, description,
@@ -102,9 +102,13 @@ function buildInvoiceHtml(invoice) {
     ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
     : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
 
- const lineItems = Array.isArray(expenses) && expenses.length
+  // Fallback line item for invoices with no per-expense breakdown (manual /
+  // generate-from-client invoices). pg returns NUMERIC columns as strings,
+  // so "0.00" is truthy in a bare `||` chain — coerce to Number first so a
+  // real zero falls through to total_amount instead of winning the chain.
+  const lineItems = Array.isArray(expenses) && expenses.length
     ? expenses
-    : [{ date: issued_date, description: description || 'Camp expenses', amount: total_expenses || total_amount || 0 }];
+    : [{ date: issued_date, description: description || 'Camp expenses', amount: Number(total_expenses) || Number(total_amount) || 0 }];
 
   //  Tax computation 
   // Order: subtotal -> + Tourism Levy (2%) -> + VAT (16% on subtotal+levy) -> grand total
@@ -219,8 +223,8 @@ function buildInvoiceHtml(invoice) {
     font-family: roboto;
     color: ${TOKENS.ink};
     padding: 44px 56px 52px;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     background: ${TOKENS.paper};
     font-variant-numeric: tabular-nums;
@@ -246,33 +250,33 @@ function buildInvoiceHtml(invoice) {
     margin-bottom: 8px;
   }
 
-  .logo-img { height: 64px; width: auto; object-fit: contain; margin-bottom: 16px; }
+  .logo-img { height: 68px; width: auto; object-fit: contain; margin-bottom: 16px; }
   .logo-mark {
-    width: 64px; height: 64px; border-radius: 18px;
+    width: 68px; height: 68px; border-radius: 18px;
     background: ${TOKENS.ink}; color: ${TOKENS.paperSoft};
     display: flex; align-items: center; justify-content: center;
     font-family: roboto, sans-serif; text-transform: uppercase;
-    font-size: 18px; font-weight: 700; letter-spacing: -0.3px;
+    font-size: 19px; font-weight: 700; letter-spacing: -0.3px;
     margin-bottom: 16px;
   }
 
   .eyebrow {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: ${TOKENS.clay};
+    color: ${TOKENS.gold};
     margin-bottom: 10px;
   }
 
   .brand-name {
     font-family: roboto, sans-serif;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 900;
     letter-spacing: -0.2px;
   }
-  .brand-sub { font-size: 11px; color: ${TOKENS.inkSoft}; letter-spacing: 0.05em; margin-top: 6px; }
-  .brand-contact { font-size: 11px; color: ${TOKENS.inkFaint}; margin-top: 14px; }
+  .brand-sub { font-size: 12px; color: ${TOKENS.inkSoft}; letter-spacing: 0.05em; margin-top: 6px; }
+  .brand-contact { font-size: 12px; color: ${TOKENS.inkFaint}; margin-top: 14px; }
   .brand-contact span { margin: 0 2px; }
   .brand-contact .sep { color: ${TOKENS.rule}; }
   .brand-contact .pin { display: block; margin-top: 4px; letter-spacing: 0.03em; }
@@ -280,43 +284,43 @@ function buildInvoiceHtml(invoice) {
   .header-divider { width: 100%; border-bottom: 1px solid ${TOKENS.rule}; margin-top: 26px; padding-bottom: 30px; }
 
   .meta-strip { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 34px; }
-  .label { font-size: 10px; color: ${TOKENS.inkFaint}; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
-  .inv-title { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${TOKENS.inkFaint}; margin-bottom: 6px; }
+  .label { font-size: 11px; color: ${TOKENS.inkFaint}; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+  .inv-title { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${TOKENS.inkFaint}; margin-bottom: 6px; }
   .inv-number {
     font-family: roboto, sans-serif;
-    font-size: 19px; font-weight: 900; color: ${TOKENS.ink}; letter-spacing: 0.01em;
+    font-size: 21px; font-weight: 900; color: ${TOKENS.ink}; letter-spacing: 0.01em;
   }
   .status-badge {
     display: inline-block; margin-top: 12px; padding: 5px 14px;
-    border-radius: 5px; font-size: 10px; font-weight: 900;
+    border-radius: 5px; font-size: 11px; font-weight: 900;
     text-transform: uppercase; letter-spacing: 0.08em;
     background: ${sm.bg}; color: ${sm.text}; border: 1px solid ${sm.border};
   }
   .dates { display: flex; text-align: right; }
   .date-item { margin-left: 40px; }
-  .date-item div:last-child { font-weight: 900; margin-top: 3px; }
+  .date-item div:last-child { font-weight: 900; margin-top: 3px; font-size: 14px; }
 
   .bill-to { margin-bottom: 34px; }
-  .client-name { font-size: 15px; font-weight: 600; }
-  .client-detail { font-size: 12px; color: ${TOKENS.inkSoft}; margin-top: 2px; }
+  .client-name { font-size: 16px; font-weight: 600; }
+  .client-detail { font-size: 13px; color: ${TOKENS.inkSoft}; margin-top: 2px; }
 
   table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
-  th { text-align: left; font-size: 9px; color: ${TOKENS.inkFaint}; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid ${TOKENS.rule}; }
-  td { padding: 14px 0; font-size: 13px; border-bottom: 1px solid ${TOKENS.rule}; vertical-align: top; }
+  th { text-align: left; font-size: 10px; color: ${TOKENS.inkFaint}; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid ${TOKENS.rule}; }
+  td { padding: 14px 0; font-size: 14px; border-bottom: 1px solid ${TOKENS.rule}; vertical-align: top; }
   .amt { text-align: right; white-space: nowrap; }
 
-  .ledger-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${TOKENS.ink}; }
-  .ledger-subtitle { font-size: 10.5px; color: ${TOKENS.inkFaint}; font-weight: 400; text-transform: none; letter-spacing: 0; margin-top: 2px; }
+  .ledger-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${TOKENS.ink}; }
+  .ledger-subtitle { font-size: 11px; color: ${TOKENS.inkFaint}; font-weight: 400; text-transform: none; letter-spacing: 0; margin-top: 2px; }
   .debit-cell { color: ${TOKENS.clay}; font-weight: 600; }
   .credit-cell { color: ${TOKENS.forest}; font-weight: 600; }
-  .ledger-totals-row td { font-size: 12.5px; color: ${TOKENS.inkSoft}; border-bottom: none; padding-top: 12px; }
+  .ledger-totals-row td { font-size: 13.5px; color: ${TOKENS.inkSoft}; border-bottom: none; padding-top: 12px; }
 
   .method-tag {
     display: inline-block;
     margin-left: 8px;
     padding: 1px 7px;
     border-radius: 4px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -325,20 +329,20 @@ function buildInvoiceHtml(invoice) {
   }
 
   .tax-summary { display: flex; justify-content: flex-end; margin-bottom: 28px; }
-  .tax-summary-box { width: 300px; }
-  .tax-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; color: ${TOKENS.inkSoft}; }
+  .tax-summary-box { width: 310px; }
+  .tax-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13.5px; color: ${TOKENS.inkSoft}; }
   .tax-row.vat-row { border-bottom: 1px solid ${TOKENS.rule}; padding-bottom: 12px; margin-bottom: 4px; }
   .tax-row span:last-child { font-weight: 600; color: ${TOKENS.ink}; }
   .tax-row.total-due-row { border-top: 2px solid ${TOKENS.ink}; margin-top: 6px; padding-top: 14px; }
-  .tax-row.total-due-row span:first-child { font-family: roboto, sans-serif; font-size: 13px; }
+  .tax-row.total-due-row span:first-child { font-family: roboto, sans-serif; font-size: 14px; }
   .tax-row.total-due-row span:last-child {
     font-family: roboto, sans-serif;
-    font-weight: 700; font-size: 19px; color: ${TOKENS.ink};
+    font-weight: 700; font-size: 21px; color: ${TOKENS.gold};
   }
   .tax-row.balance-row span { font-weight: 700; }
   .tax-row.balance-row.settled span:last-child { color: ${TOKENS.forest}; }
   .tax-row.balance-row.owing span:last-child { color: ${TOKENS.clay}; }
-  .vat-note { font-size: 10px; color: ${TOKENS.inkFaint}; margin-top: 10px; text-align: right; }
+  .vat-note { font-size: 11px; color: ${TOKENS.inkFaint}; margin-top: 10px; text-align: right; }
 
   /* Payment section — two-column card, table-safe spacing, break-safe as a unit */
   .payment-wrapper {
@@ -376,7 +380,7 @@ function buildInvoiceHtml(invoice) {
   }
 
   .payment-title {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -390,7 +394,7 @@ function buildInvoiceHtml(invoice) {
     display: flex;
     justify-content: space-between;
     padding: 9px 0;
-    font-size: 12.5px;
+    font-size: 13.5px;
     border-bottom: 1px solid #efe9e0;
     font-weight: 700;
   }
@@ -399,16 +403,16 @@ function buildInvoiceHtml(invoice) {
   .bank-detail-value { font-weight: 600; color: ${TOKENS.ink}; text-align: right; }
 
   .qr-code-image { width: 160px; height: 160px; object-fit: contain; margin-bottom: 12px; }
-  .qr-code-label { font-size: 9.5px; color: ${TOKENS.inkFaint}; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
-  .qr-code-amount { font-family: roboto; font-size: 15px; font-weight: 700; color: ${TOKENS.ink}; margin-top: 4px; }
+  .qr-code-label { font-size: 10.5px; color: ${TOKENS.inkFaint}; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
+  .qr-code-amount { font-family: roboto; font-size: 17px; font-weight: 700; color: ${TOKENS.gold}; margin-top: 4px; }
 
-  .notes { margin-bottom: 28px; padding: 16px 18px; background: ${TOKENS.paperSoft}; border-radius: 8px; font-size: 12px; color: ${TOKENS.inkSoft}; line-height: 1.6; }
+  .notes { margin-bottom: 28px; padding: 16px 18px; background: ${TOKENS.paperSoft}; border-radius: 8px; font-size: 13px; color: ${TOKENS.inkSoft}; line-height: 1.6; }
   .notes strong { color: ${TOKENS.ink}; }
 
   .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
-  .footer-thanks { font-family: roboto; font-size: 13px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
-  .footer-sub { font-size: 11px; color: ${TOKENS.inkFaint};  font-weight: 500; letter-spacing: 0.02em; }
-  .footer-legal { font-size: 9.5px; color: ${TOKENS.inkFaint}; margin-top: 10px; }
+  .footer-thanks { font-family: roboto; font-size: 14px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
+  .footer-sub { font-size: 12px; color: ${TOKENS.inkFaint};  font-weight: 500; letter-spacing: 0.02em; }
+  .footer-legal { font-size: 10.5px; color: ${TOKENS.inkFaint}; margin-top: 10px; }
 
   @media print {
     .payment-wrapper { page-break-inside: avoid; }
