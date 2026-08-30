@@ -195,10 +195,12 @@ left join (
 ) p on p.invoice_id = i.id;
 
 
+CREATE UNIQUE INDEX IF NOT EXISTS clients_email_unique_idx ON clients (lower(email));
+
 -- insert into users (full_name, email, password_hash, role)
 -- values (
 --   'Admin',
 --   'admin@kechei.com',
 --   '$2b$10$REPLACEME_WITH_REAL_BCRYPT_HASH',
 --   'admin'
--- );
+-- );`

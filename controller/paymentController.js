@@ -21,7 +21,6 @@ const paymentController = {
 
       const payment = await PaymentModel.create({ invoice_id, amount_paid, method, payment_date, notes });
 
-      // Auto-update invoice status after each payment
       const invoice = await InvoiceModel.updateStatus(invoice_id);
 
       res.status(201).json({ payment, invoice_status: invoice.status });
@@ -30,14 +29,18 @@ const paymentController = {
     }
   },
 
-  async delete(req, res) {
-    try {
-      await PaymentModel.delete(req.params.id);
-      res.json({ message: 'Payment deleted' });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  },
+ async delete(req, res) {
+  try {
+    const deleted = await PaymentModel.delete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Payment not found' });
+
+    const invoice = await InvoiceModel.updateStatus(deleted.invoice_id);
+
+    res.json({ message: 'Payment deleted', invoice_status: invoice.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+},
 
   // get All 
 async getAll(req, res) {

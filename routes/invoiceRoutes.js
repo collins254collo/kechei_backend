@@ -6,7 +6,7 @@ const { authenticate, adminOnly } = require('../middleware/authMiddleware');
 router.get('/',                       authenticate, invoiceController.getAll);
 router.post('/generate',              authenticate, invoiceController.generateFromVisit);
 router.post('/generate-from-client',  authenticate, invoiceController.generateFromClient);
-router.post('/manual',                  authenticate, invoiceController.createManual);
+router.post('/manual',                authenticate, adminOnly, invoiceController.createManual);
 router.post('/:id/send',              authenticate, invoiceController.sendToClient);
 router.get('/preview/:client_id',     authenticate, invoiceController.previewByClient);
 router.get('/:id/pdf',                authenticate, invoiceController.previewPdf);

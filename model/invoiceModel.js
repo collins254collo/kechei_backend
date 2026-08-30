@@ -1,3 +1,4 @@
+// invoiceModel.js
 const db = require('../config/db');
 
 const VAT_RATE = 0.16;
@@ -57,21 +58,23 @@ const InvoiceModel = {
     return rows[0];
   },
 
-  async generateNumber() {
-    const { rows } = await db.query(`SELECT nextval('invoice_number_seq') AS seq`);
+  async generateNumber(queryable = db) {
+    const { rows } = await queryable.query(`SELECT nextval('invoice_number_seq') AS seq`);
     const year = new Date().getFullYear();
     const seq  = String(rows[0].seq).padStart(4, '0');
     return `INV-${year}-${seq}`;
   },
 
-  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date, notes }) {
-    const invoice_number = await this.generateNumber();
+  // insert participates in the caller's BEGIN/COMMIT instead of autocommitting
+  // on a separate pool connection.
+  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date, notes }, queryable = db) {
+    const invoice_number = await this.generateNumber(queryable);
 
     const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
 
     const computedFinal = subtotal * (1 + VAT_RATE);
 
-    const { rows } = await db.query(
+    const { rows } = await queryable.query(
       `INSERT INTO invoices
          (invoice_number, client_id, visit_id, total_services, total_expenses,
           total_amount, final_amount, description, status, issued_date, due_date, notes)

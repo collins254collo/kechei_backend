@@ -60,6 +60,7 @@ const PAYMENT_METHOD_META = {
   cheque: { label: 'Cheque', color: TOKENS.gold },
   other: { label: 'Other', color: TOKENS.inkSoft },
 };
+
 const FALLBACK_METHOD_META = { label: 'Other', color: TOKENS.inkSoft };
 
 function methodMeta(method) {
@@ -391,9 +392,10 @@ function buildInvoiceHtml(invoice) {
     padding: 9px 0;
     font-size: 12.5px;
     border-bottom: 1px solid #efe9e0;
+    font-weight: 700;
   }
   .bank-detail-row:last-child { border-bottom: none; }
-  .bank-detail-label { color: ${TOKENS.inkFaint}; font-weight: 500; letter-spacing: 0.02em; }
+  .bank-detail-label { color: ${TOKENS.inkFaint}; font-weight: 700; letter-spacing: 0.02em; }
   .bank-detail-value { font-weight: 600; color: ${TOKENS.ink}; text-align: right; }
 
   .qr-code-image { width: 160px; height: 160px; object-fit: contain; margin-bottom: 12px; }
@@ -405,7 +407,7 @@ function buildInvoiceHtml(invoice) {
 
   .footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
   .footer-thanks { font-family: roboto; font-size: 13px; font-weight: 700; color: ${TOKENS.ink}; margin-bottom: 4px; }
-  .footer-sub { font-size: 11px; color: ${TOKENS.inkFaint}; }
+  .footer-sub { font-size: 11px; color: ${TOKENS.inkFaint};  font-weight: 500; letter-spacing: 0.02em; }
   .footer-legal { font-size: 9.5px; color: ${TOKENS.inkFaint}; margin-top: 10px; }
 
   @media print {
@@ -533,7 +535,6 @@ function buildInvoiceHtml(invoice) {
   <div class="footer">
     <div class="footer-thanks">Asante — Thank you for training with ${CAMP.name}</div>
     <div class="footer-sub">${CAMP.website}</div>
-    <div class="footer-legal">This is a computer-generated tax invoice and does not require a signature.</div>
   </div>
 
 </body>
