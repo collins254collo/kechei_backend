@@ -20,7 +20,7 @@ const CAMP = {
   tagline: 'Iten, Kenya — Home of Champions',
   altitude: 'Alt. 2,400m',
   address: 'Iten, Elgeyo-Marakwet County, Kenya',
-  phone: '+254 7XX XXX XXX',
+  phone: '+254 716 888 123',
   email: process.env.RESEND_EMAIL,
   website: 'www.kechei.com',
   kraPin: process.env.CAMP_KRA_PIN || 'P0XXXXXXXXX', 
@@ -82,10 +82,10 @@ function fmtDate(d) {
 }
 
 function buildInvoiceHtml(invoice) {
-  const {
+ const {
     invoice_number, full_name, phone, email,
     total_expenses, total_amount, final_amount, paid_amount, status,
-    issued_date, due_date, notes,
+    issued_date, due_date, notes, description,
     expenses,
     payments,
   } = invoice;
@@ -102,9 +102,9 @@ function buildInvoiceHtml(invoice) {
     ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
     : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
 
-  const lineItems = Array.isArray(expenses) && expenses.length
+ const lineItems = Array.isArray(expenses) && expenses.length
     ? expenses
-    : [{ date: issued_date, description: 'Camp expenses', amount: total_expenses }];
+    : [{ date: issued_date, description: description || 'Camp expenses', amount: total_expenses || total_amount || 0 }];
 
   //  Tax computation 
   // Order: subtotal -> + Tourism Levy (2%) -> + VAT (16% on subtotal+levy) -> grand total

@@ -31,7 +31,7 @@ async function sendInvoiceEmail({ to, invoice, pdfBuffer }) {
     to,
     subject: `Invoice ${invoice.invoice_number} from Kechei Training Camp`,
     html: buildInvoiceEmailHtml(invoice),
-    text: `Dear ${invoice.full_name},\n\nPlease find attached invoice ${invoice.invoice_number} for KES ${Number(invoice.total_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}.\n\nThank you for training with us.\n\nBest regards,\nKechei Training Camp`,
+    text: `Dear ${invoice.full_name},\n\nPlease find attached invoice ${invoice.invoice_number} for KES ${Number(invoice.final_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}.\n\nThank you for training with us.\n\nBest regards,\nKechei Training Camp`,
     attachments: [
       {
         filename: `${invoice.invoice_number}.pdf`,
