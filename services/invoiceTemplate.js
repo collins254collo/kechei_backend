@@ -73,7 +73,7 @@ function capitalize(s) {
 }
 
 function fmt(n) {
-  return `KES ${Number(n || 0).toLocaleString()}`;
+  return `KES ${Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtDate(d) {
@@ -119,14 +119,24 @@ async function buildInvoiceHtml(invoice) {
     : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const tourismLevy = subtotal * TOURISM_LEVY_RATE;
+  const vatAmount = (subtotal + tourismLevy) * VAT_RATE;
+  const grandTotal = subtotal + tourismLevy + vatAmount;
 
-  const grandTotal = hasStoredAmounts
-    ? Number(final_amount)
-    : (subtotal + tourismLevy) * (1 + VAT_RATE);
-
-  const vatAmount = hasStoredAmounts
-    ? grandTotal - subtotal - tourismLevy
-    : (subtotal + tourismLevy) * VAT_RATE;
+  // A stored final_amount is only trustworthy if it agrees with what the
+  // current rates actually produce. If it doesn't — rates changed since the
+  if (hasStoredAmounts) {
+    const storedGrandTotal = Number(final_amount);
+    const discrepancy = storedGrandTotal - grandTotal;
+    if (Math.abs(discrepancy) > 1) { // >1 KES tolerance for float/rounding noise
+      console.error(
+        `[invoice ${invoice_number}] stored final_amount (${storedGrandTotal.toFixed(2)}) ` +
+        `does not match freshly computed total (${grandTotal.toFixed(2)}) — ` +
+        `difference of ${discrepancy.toFixed(2)} KES. Rendering with the computed ` +
+        `value so the PDF stays internally consistent; the stored amounts for this ` +
+        `invoice should be reviewed.`
+      );
+    }
+  }
 
   const paymentList = Array.isArray(payments) ? payments : [];
 
