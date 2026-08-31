@@ -514,7 +514,7 @@ async function buildInvoiceHtml(invoice) {
       <div class="tax-row"><span>Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%)</span><span>${fmt(tourismLevy)}</span></div>
       <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
       <div class="tax-row total-due-row"><span>Total Due</span><span>${fmt(grandTotal)}</span></div>
-      <div class="tax-row"><span>Amount Paid</span><span>${fmt(amountPaid)}</span></div>
+      <div class="tax-row"><span>Amount Paid</span><span>${fmt(totalCredit)}</span></div>
       <div class="tax-row balance-row ${balanceDue <= 0 ? 'settled' : 'owing'}">
         <span>${balanceDue <= 0 ? 'Balance Settled' : 'Balance Due'}</span>
         <span>${fmt(balanceDue)}</span>
