@@ -12,7 +12,7 @@ function buildInvoiceEmailHtml(invoice) {
     <p>Dear ${invoice.full_name},</p>
     <p>
       Please find attached invoice <strong>${invoice.invoice_number}</strong> for
-      <strong>KES ${Number(invoice.total_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}</strong>.
+      <strong>KES ${Number(invoice.final_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}</strong>.
     </p>
     <p>Thank you for training with us.</p>
     <p style="margin-top: 24px;">
