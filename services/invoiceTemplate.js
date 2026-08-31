@@ -102,16 +102,11 @@ async function buildInvoiceHtml(invoice) {
     ? `<img src="${CAMP.logoUrl}" alt="${CAMP.name}" class="logo-img" />`
     : `<div class="logo-mark">${CAMP.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</div>`;
 
-  // Fallback line item for invoices with no per-expense breakdown (manual /
-  // generate-from-client invoices). pg returns NUMERIC columns as strings,
-  // so "0.00" is truthy in a bare `||` chain — coerce to Number first so a
-  // real zero falls through to total_amount instead of winning the chain.
   const lineItems = Array.isArray(expenses) && expenses.length
     ? expenses
     : [{ date: issued_date, description: description || 'Camp expenses', amount: Number(total_expenses) || Number(total_amount) || 0 }];
 
-  //  Tax computation 
-  // Order: subtotal -> + Tourism Levy (2%) -> + VAT (16% on subtotal+levy) -> grand total
+  // Tax computation 
   const hasStoredAmounts = total_amount != null && final_amount != null;
 
   const subtotal = hasStoredAmounts
@@ -119,15 +114,13 @@ async function buildInvoiceHtml(invoice) {
     : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const tourismLevy = subtotal * TOURISM_LEVY_RATE;
-  const vatAmount = (subtotal + tourismLevy) * VAT_RATE;
+  const vatAmount = subtotal * VAT_RATE; 
   const grandTotal = subtotal + tourismLevy + vatAmount;
 
-  // A stored final_amount is only trustworthy if it agrees with what the
-  // current rates actually produce. If it doesn't — rates changed since the
   if (hasStoredAmounts) {
     const storedGrandTotal = Number(final_amount);
     const discrepancy = storedGrandTotal - grandTotal;
-    if (Math.abs(discrepancy) > 1) { // >1 KES tolerance for float/rounding noise
+    if (Math.abs(discrepancy) > 1) {
       console.error(
         `[invoice ${invoice_number}] stored final_amount (${storedGrandTotal.toFixed(2)}) ` +
         `does not match freshly computed total (${grandTotal.toFixed(2)}) — ` +
@@ -139,7 +132,6 @@ async function buildInvoiceHtml(invoice) {
   }
 
   const paymentList = Array.isArray(payments) ? payments : [];
-
   const ledgerEntries = [];
 
   lineItems.forEach(item => {
@@ -163,7 +155,7 @@ async function buildInvoiceHtml(invoice) {
   if (vatAmount > 0) {
     ledgerEntries.push({
       date: issued_date,
-      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`,
+      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`, // FIXED: Text description remains matching
       debit: vatAmount,
       credit: 0,
     });
@@ -203,11 +195,10 @@ async function buildInvoiceHtml(invoice) {
 
   const totalDebit = ledgerEntries.reduce((s, e) => s + e.debit, 0);
   const totalCredit = ledgerEntries.reduce((s, e) => s + e.credit, 0);
-  const amountPaid = totalCredit;
   const balanceDue = Math.max(0, totalDebit - totalCredit);
 
   // Generate QR Code with payment details
- const qrData = JSON.stringify({
+  const qrData = JSON.stringify({
     bank: BANK.bankName,
     account: BANK.accountNumber,
     name: BANK.accountName,
@@ -221,6 +212,7 @@ async function buildInvoiceHtml(invoice) {
   } catch (err) {
     console.error('QR generation failed:', err.message);
   }
+
 
   return `
 <!DOCTYPE html>
