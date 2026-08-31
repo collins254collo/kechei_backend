@@ -329,7 +329,7 @@ const invoiceController = {
       const expenses = await ExpenseModel.getByInvoice(invoice.id);
       const payments = await PaymentModel.getByInvoice(invoice.id);
 
-      const html = buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
+      const html = await buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
       const pdfBuffer = await generatePdfFromHtml(html);
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -353,7 +353,7 @@ const invoiceController = {
       const expenses = await ExpenseModel.getByInvoice(invoice.id);
       const payments = await PaymentModel.getByInvoice(invoice.id);
 
-      const html = buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
+      const html = await buildInvoiceHtml({ ...invoice, expenses, payments: payments.slice().reverse() });
       const pdfBuffer = await generatePdfFromHtml(html);
       await sendInvoiceEmail({ to: invoice.email, invoice, pdfBuffer });
 

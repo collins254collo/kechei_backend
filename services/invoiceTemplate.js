@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const QRCode = require('qrcode');
 
-
-function getLogoDataUri() {
+async function getLogoDataUri() {
   try {
     const svgPath = path.join(__dirname, '../public/kechei.svg');
     const svg = fs.readFileSync(svgPath, 'utf8');
