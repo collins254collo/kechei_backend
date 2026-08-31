@@ -10,7 +10,7 @@ const visitController = {
     }
   },
 
-  async getActive(req, res) {
+async getActive(req, res) {
     try {
       const visits = await VisitModel.getActive();
       res.json(visits);
@@ -19,7 +19,7 @@ const visitController = {
     }
   },
 
-  async getById(req, res) {
+async getById(req, res) {
     try {
       const visit = await VisitModel.getById(req.params.id);
       if (!visit) return res.status(404).json({ error: 'Visit not found' });
@@ -31,18 +31,18 @@ const visitController = {
 
 async create(req, res) {
   try {
-    const { client_id, reason, notes, room_number } = req.body;
+    const { client_id, reason, notes, room_number, group_id, group_name, is_group_leader } = req.body;
     if (!client_id || !reason?.trim()) {
       return res.status(400).json({ error: 'client_id and reason are required' });
     }
-    const visit = await VisitModel.create({ client_id, reason, notes, room_number });
+    const visit = await VisitModel.create({ client_id, reason, notes, room_number, group_id, group_name, is_group_leader });
     res.status(201).json(visit);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 },
 
-  async complete(req, res) {
+ async complete(req, res) {
     try {
       const visit = await VisitModel.complete(req.params.id);
       if (!visit) return res.status(404).json({ error: 'Visit not found' });
@@ -52,7 +52,7 @@ async create(req, res) {
     }
   },
 
-  async update(req, res) {
+async update(req, res) {
     try {
       const visit = await VisitModel.update(req.params.id, req.body);
       if (!visit) return res.status(404).json({ error: 'Visit not found' });
@@ -62,7 +62,7 @@ async create(req, res) {
     }
   },
 
-  async delete(req, res) {
+async delete(req, res) {
     try {
       await VisitModel.delete(req.params.id);
       res.json({ message: 'Visit deleted' });
@@ -71,7 +71,7 @@ async create(req, res) {
     }
   },
 
-  async getAll(req, res) {
+async getAll(req, res) {
   try {
     const visits = await VisitModel.getAll();
     res.json(visits);

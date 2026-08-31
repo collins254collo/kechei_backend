@@ -89,6 +89,7 @@ const invoiceController = {
     }
   },
 
+  //  generate an invoice covering every unbilled expense for a single visit
   async generateFromVisit(req, res) {
     const dbClient = await db.connect();
     try {
@@ -190,61 +191,116 @@ const invoiceController = {
     }
   },
 
+  // Group invoice — bills every unbilled expense across every visit sharing
+  // a group_id (regardless of which member's visit it's attached to) onto a
+  // single invoice, billed to whichever member was marked group leader at check-in.
+  async generateFromGroup(req, res) {
+    const dbClient = await db.connect();
+    try {
+      const { group_id, due_date, notes } = req.body;
+      if (!group_id) return res.status(400).json({ error: 'group_id is required' });
+
+      const existing = await InvoiceModel.getByGroup(group_id);
+      if (existing) {
+        return res.status(409).json({
+          error: 'Invoice already exists for this group',
+          invoice: existing,
+        });
+      }
+
+      const { rows: leaderRows } = await db.query(
+        `SELECT client_id FROM visits WHERE group_id = $1 AND is_group_leader = true LIMIT 1`,
+        [group_id]
+      );
+      if (!leaderRows.length) return res.status(404).json({ error: 'Group leader not found for this group' });
+      const client_id = leaderRows[0].client_id;
+
+      await dbClient.query('BEGIN');
+
+      const lockedExpenseRows = await ExpenseModel.getUnbilledByGroupForUpdate(dbClient, group_id);
+      const total_expenses = lockedExpenseRows.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+
+      if (total_expenses <= 0) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'No unbilled expenses for this group' });
+      }
+
+      const invoice = await InvoiceModel.create({
+        client_id,
+        group_id,
+        total_expenses,
+        total_amount: total_expenses,
+        due_date,
+        notes,
+      }, dbClient);
+
+      await ExpenseModel.markInvoicedByGroup(dbClient, group_id, invoice.id);
+
+      await dbClient.query('COMMIT');
+      res.status(201).json(invoice);
+    } catch (err) {
+      await dbClient.query('ROLLBACK');
+      res.status(500).json({ error: err.message });
+    } finally {
+      dbClient.release();
+    }
+  },
+
   // Manual invoice — admin enters the amount and description directly.
   // Either an existing client_id is supplied, or a brand-new client is
   // resolved (found by email, or created) from client_name/client_email/client_phone.
- async createManual(req, res) {
-  const dbClient = await db.connect();
-  try {
-    const { client_id, client_name, client_email, client_phone,
-            amount, description, due_date, notes } = req.body;
+  async createManual(req, res) {
+    const dbClient = await db.connect();
+    try {
+      const { client_id, client_name, client_email, client_phone,
+              amount, description, due_date, notes } = req.body;
 
-    const amountNum = Number(amount);
-    if (amount == null || Number.isNaN(amountNum) || amountNum <= 0) {
-      return res.status(400).json({ error: 'amount must be a positive number' });
+      const amountNum = Number(amount);
+      if (amount == null || Number.isNaN(amountNum) || amountNum <= 0) {
+        return res.status(400).json({ error: 'amount must be a positive number' });
+      }
+      if (!description || !String(description).trim()) {
+        return res.status(400).json({ error: 'description is required' });
+      }
+      if (!client_id && !(client_name && client_email)) {
+        return res.status(400).json({ error: 'Provide client_id, or client_name and client_email' });
+      }
+      if (!client_id && client_email && !EMAIL_RE.test(String(client_email).trim())) {
+        return res.status(400).json({ error: 'client_email is not a valid email address' });
+      }
+
+      await dbClient.query('BEGIN');
+
+      let resolvedClientId = client_id || null;
+
+      if (!resolvedClientId) {
+        const { rows: clientRows } = await dbClient.query(
+          `INSERT INTO clients (full_name, email, phone)
+           VALUES ($1, $2, $3)
+           ON CONFLICT ((lower(email))) DO UPDATE SET email = clients.email
+           RETURNING id`,
+          [client_name.trim(), client_email.trim(), client_phone ? String(client_phone).trim() : null]
+        );
+        resolvedClientId = clientRows[0].id;
+      }
+
+      const invoice = await InvoiceModel.create({
+        client_id: resolvedClientId,
+        total_amount: amountNum,
+        description: String(description).trim(),
+        due_date,
+        notes,
+      }, dbClient);
+
+      await dbClient.query('COMMIT');
+      res.status(201).json(invoice);
+    } catch (err) {
+      await dbClient.query('ROLLBACK');
+      res.status(500).json({ error: err.message });
+    } finally {
+      dbClient.release();
     }
-    if (!description || !String(description).trim()) {
-      return res.status(400).json({ error: 'description is required' });
-    }
-    if (!client_id && !(client_name && client_email)) {
-      return res.status(400).json({ error: 'Provide client_id, or client_name and client_email' });
-    }
-    if (!client_id && client_email && !EMAIL_RE.test(String(client_email).trim())) {
-      return res.status(400).json({ error: 'client_email is not a valid email address' });
-    }
-
-    await dbClient.query('BEGIN');
-
-    let resolvedClientId = client_id || null;
-
-    if (!resolvedClientId) {
-      const { rows: clientRows } = await dbClient.query(
-        `INSERT INTO clients (full_name, email, phone)
-         VALUES ($1, $2, $3)
-         ON CONFLICT ((lower(email))) DO UPDATE SET email = clients.email
-         RETURNING id`,
-        [client_name.trim(), client_email.trim(), client_phone ? String(client_phone).trim() : null]
-      );
-      resolvedClientId = clientRows[0].id;
-    }
-
-   const invoice = await InvoiceModel.create({
-          client_id: resolvedClientId,
-          total_amount: amountNum,
-          description: String(description).trim(),
-          due_date,
-          notes,
-        }, dbClient);
-
-    await dbClient.query('COMMIT');
-    res.status(201).json(invoice);
-  } catch (err) {
-    await dbClient.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    dbClient.release();
-  }
-},
+  },
 
   async update(req, res) {
     try {

@@ -103,6 +103,30 @@ const ExpenseModel = {
     );
     return rows;
   },
+
+  async getUnbilledByGroupForUpdate(dbClient, group_id) {
+  const { rows } = await dbClient.query(
+    `SELECT e.id, e.amount
+       FROM expenses e
+       JOIN visits v ON v.id = e.visit_id
+      WHERE v.group_id = $1 AND e.invoice_id IS NULL
+      FOR UPDATE OF e`,
+    [group_id]
+  );
+  return rows;
+},
+
+async markInvoicedByGroup(dbClient, group_id, invoice_id) {
+  await dbClient.query(
+    `UPDATE expenses e
+        SET invoice_id = $2
+       FROM visits v
+      WHERE e.visit_id = v.id
+        AND v.group_id = $1
+        AND e.invoice_id IS NULL`,
+    [group_id, invoice_id]
+    );
+  },
 };
 
 module.exports = ExpenseModel;

@@ -1,4 +1,3 @@
-// invoiceModel.js
 const db = require('../config/db');
 
 const VAT_RATE = 0.16;
@@ -11,6 +10,7 @@ const InvoiceModel = {
          i.invoice_number,
          i.client_id,
          i.visit_id,
+         i.group_id,
          i.total_services,
          i.total_expenses,
          i.total_amount,
@@ -58,6 +58,15 @@ const InvoiceModel = {
     return rows[0];
   },
 
+  // Dedup check for group billing — mirrors getByVisit.
+  async getByGroup(group_id) {
+    const { rows } = await db.query(
+      `SELECT * FROM invoices WHERE group_id = $1`,
+      [group_id]
+    );
+    return rows[0];
+  },
+
   async generateNumber(queryable = db) {
     const { rows } = await queryable.query(`SELECT nextval('invoice_number_seq') AS seq`);
     const year = new Date().getFullYear();
@@ -65,37 +74,37 @@ const InvoiceModel = {
     return `INV-${year}-${seq}`;
   },
 
-  // insert participates in the caller's BEGIN/COMMIT instead of autocommitting
   // on a separate pool connection.
-  async create({ client_id, visit_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date, notes }, queryable = db) {
-    const invoice_number = await this.generateNumber(queryable);
+    async create({ client_id, visit_id, group_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date,   notes }, queryable = db) {
+      const invoice_number = await this.generateNumber(queryable);
 
-    const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
+      const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
 
-    const computedFinal = subtotal * (1 + VAT_RATE);
+      const computedFinal = subtotal * (1 + VAT_RATE);
 
-    const { rows } = await queryable.query(
-      `INSERT INTO invoices
-         (invoice_number, client_id, visit_id, total_services, total_expenses,
-          total_amount, final_amount, description, status, issued_date, due_date, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'unpaid',$9,$10,$11)
-       RETURNING *`,
-      [
-        invoice_number,
-        client_id   ?? null,
-        visit_id    ?? null,
-        total_services,
-        total_expenses,
-        subtotal,
-        final_amount ?? computedFinal,
-        description  ?? null,
-        issued_date   || new Date().toISOString().split('T')[0],
-        due_date      || null,
-        notes         || null,
-      ]
-    );
-    return rows[0];
-  },
+      const { rows } = await queryable.query(
+        `INSERT INTO invoices
+          (invoice_number, client_id, visit_id, group_id, total_services, total_expenses,
+            total_amount, final_amount, description, status, issued_date, due_date, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'unpaid',$10,$11,$12)
+        RETURNING *`,
+        [
+          invoice_number,
+          client_id   ?? null,
+          visit_id    ?? null,
+          group_id    ?? null,
+          total_services,
+          total_expenses,
+          subtotal,
+          final_amount ?? computedFinal,
+          description  ?? null,
+          issued_date   || new Date().toISOString().split('T')[0],
+          due_date      || null,
+          notes         || null,
+        ]
+      );
+      return rows[0];
+    },
 
   async update(id, { status, total_amount, final_amount, paid_amount, due_date, notes }) {
     let resolvedFinal = final_amount ?? null;

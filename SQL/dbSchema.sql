@@ -197,6 +197,14 @@ left join (
 
 CREATE UNIQUE INDEX IF NOT EXISTS clients_email_unique_idx ON clients (lower(email));
 
+ALTER TABLE visits ADD COLUMN group_id UUID NULL;
+ALTER TABLE visits ADD COLUMN group_name TEXT NULL;
+ALTER TABLE visits ADD COLUMN is_group_leader BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS visits_group_id_idx ON visits (group_id);
+
+ALTER TABLE invoices ADD COLUMN group_id UUID NULL;
+CREATE INDEX IF NOT EXISTS invoices_group_id_idx ON invoices (group_id);
+
 -- insert into users (full_name, email, password_hash, role)
 -- values (
 --   'Admin',

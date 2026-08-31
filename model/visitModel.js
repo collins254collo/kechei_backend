@@ -25,16 +25,18 @@ async getActive() {
   );
   return rows;
 },
-  async create({ client_id, reason, notes, room_number }) {
+
+
+async create({ client_id, reason, notes, room_number, group_id, group_name, is_group_leader }) {
   const { rows } = await db.query(
-    `INSERT INTO visits (client_id, reason, notes, room_number, status, created_at)
-     VALUES ($1, $2, $3, $4, 'active', NOW()) RETURNING *`,
-    [client_id, reason, notes || null, room_number || null]
+    `INSERT INTO visits (client_id, reason, notes, room_number, group_id, group_name, is_group_leader, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', NOW()) RETURNING *`,
+    [client_id, reason, notes || null, room_number || null, group_id || null, group_name || null, is_group_leader || false]
   );
   return rows[0];
 },
 
-  async complete(id) {
+async complete(id) {
   const { rows } = await db.query(
     `UPDATE visits SET status = 'completed', completed_at = NOW()
      WHERE id = $1 RETURNING *`,
@@ -43,7 +45,7 @@ async getActive() {
   return rows[0];
 },
 
-  async update(id, { check_in, check_out, status, room_number }) {
+async update(id, { check_in, check_out, status, room_number }) {
     const { rows } = await db.query(
       `UPDATE visits SET check_in=$1, check_out=$2, status=$3, room_number=$4
        WHERE id=$5 RETURNING *`,
@@ -52,12 +54,12 @@ async getActive() {
     return rows[0];
   },
 
-  async delete(id) {
+async delete(id) {
     await db.query('DELETE FROM visits WHERE id = $1', [id]);
   },
 
   // get 
-  async getAll() {
+async getAll() {
   const { rows } = await db.query(
     `SELECT v.*, c.full_name AS client_name, c.phone
      FROM visits v
