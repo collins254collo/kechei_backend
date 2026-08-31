@@ -155,7 +155,7 @@ async function buildInvoiceHtml(invoice) {
   if (vatAmount > 0) {
     ledgerEntries.push({
       date: issued_date,
-      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`, // FIXED: Text description remains matching
+      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`, 
       debit: vatAmount,
       credit: 0,
     });
