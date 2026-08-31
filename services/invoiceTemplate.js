@@ -81,7 +81,7 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function buildInvoiceHtml(invoice) {
+async function buildInvoiceHtml(invoice) {
   const {
     invoice_number, full_name, phone, email,
     total_expenses, total_amount, final_amount, paid_amount, status,
@@ -197,14 +197,20 @@ function buildInvoiceHtml(invoice) {
   const balanceDue = Math.max(0, totalDebit - totalCredit);
 
   // Generate QR Code with payment details
-  const qrData = JSON.stringify({
+ const qrData = JSON.stringify({
     bank: BANK.bankName,
     account: BANK.accountNumber,
     name: BANK.accountName,
     ref: invoice_number,
     amount: grandTotal,
   });
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+
+  let qrCodeUrl = '';
+  try {
+    qrCodeUrl = await QRCode.toDataURL(qrData, { width: 200, margin: 1 });
+  } catch (err) {
+    console.error('QR generation failed:', err.message);
+  }
 
   return `
 <!DOCTYPE html>
