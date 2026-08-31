@@ -6,13 +6,17 @@ if (!process.env.RESEND_API_KEY) {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-function buildInvoiceEmailHtml(invoice) {
+function fmtKes(n) {
+  return `KES ${Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function buildInvoiceEmailHtml(invoice, amountDue) {
   return `
   <div style="font-family: Arial, Helvetica, sans-serif; color: #1f2937; font-size: 14px; line-height: 1.6; max-width: 480px;">
     <p>Dear ${invoice.full_name},</p>
     <p>
       Please find attached invoice <strong>${invoice.invoice_number}</strong> for
-      <strong>KES ${Number(invoice.final_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}</strong>.
+      <strong>${fmtKes(amountDue)}</strong>.
     </p>
     <p>Thank you for training with us.</p>
     <p style="margin-top: 24px;">
@@ -23,15 +27,28 @@ function buildInvoiceEmailHtml(invoice) {
   `;
 }
 
-async function sendInvoiceEmail({ to, invoice, pdfBuffer }) {
+async function sendInvoiceEmail({ to, invoice, pdfBuffer, amountDue }) {
   const buffer = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
+
+  const resolvedAmount = amountDue != null ? Number(amountDue) : Number(invoice.final_amount);
+
+  if (!Number.isFinite(resolvedAmount)) {
+    throw new Error(`Cannot send invoice email: no valid amount for invoice ${invoice.invoice_number}`);
+  }
+
+  if (amountDue == null) {
+    console.warn(
+      `[invoice ${invoice.invoice_number}] sendInvoiceEmail called without amountDue — ` +
+      `falling back to stored final_amount, which may not match the attached PDF.`
+    );
+  }
 
   const { data, error } = await resend.emails.send({
     from: `Kechei Training Camp <${process.env.RESEND_EMAIL}>`,
     to,
     subject: `Invoice ${invoice.invoice_number} from Kechei Training Camp`,
-    html: buildInvoiceEmailHtml(invoice),
-    text: `Dear ${invoice.full_name},\n\nPlease find attached invoice ${invoice.invoice_number} for KES ${Number(invoice.final_amount).toLocaleString('en-KE', { minimumFractionDigits: 2 })}.\n\nThank you for training with us.\n\nBest regards,\nKechei Training Camp`,
+    html: buildInvoiceEmailHtml(invoice, resolvedAmount),
+    text: `Dear ${invoice.full_name},\n\nPlease find attached invoice ${invoice.invoice_number} for ${fmtKes(resolvedAmount)}.\n\nThank you for training with us.\n\nBest regards,\nKechei Training Camp`,
     attachments: [
       {
         filename: `${invoice.invoice_number}.pdf`,
