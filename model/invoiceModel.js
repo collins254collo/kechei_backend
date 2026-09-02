@@ -2,7 +2,6 @@ const db = require('../config/db');
 
 const VAT_RATE = 0.16;
 const TOURISM_LEVY_RATE = 0.02;
-const TOTAL_MULTIPLIER = 1 + VAT_RATE + TOURISM_LEVY_RATE; // 1.18 — keep in sync with invoiceTemplate.js
 
 const InvoiceModel = {
 
@@ -83,8 +82,7 @@ const InvoiceModel = {
 
       const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
 
-      // Grand total = subtotal + VAT (16%) + Tourism Levy (2%), matching invoiceTemplate.js
-      const computedFinal = subtotal * TOTAL_MULTIPLIER;
+      const computedFinal = subtotal;
 
       const { rows } = await queryable.query(
         `INSERT INTO invoices
@@ -114,8 +112,7 @@ const InvoiceModel = {
     let resolvedFinal = final_amount ?? null;
 
     if (total_amount != null && final_amount == null) {
-      // Grand total = subtotal + VAT (16%) + Tourism Levy (2%), matching invoiceTemplate.js
-      resolvedFinal = Number(total_amount) * TOTAL_MULTIPLIER;
+      resolvedFinal = Number(total_amount);
     }
 
     const { rows } = await db.query(

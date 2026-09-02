@@ -2,7 +2,8 @@ const UserModel = require('../model/userModel');
 const jwt = require('jsonwebtoken');
 
 const authController = {
-  async login(req, res) {
+
+ async login(req, res) {
     try {
       const { password } = req.body;
       const email = req.body.email?.trim().toLowerCase();

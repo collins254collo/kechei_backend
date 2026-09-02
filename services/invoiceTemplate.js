@@ -16,7 +16,7 @@ function getLogoDataUri() {
 
 // Camp / business details
 const CAMP = {
-  name: 'Kechei Centre',
+  // name: 'Kechei Centre',
   tagline: 'Iten, Kenya — Home of Champions',
   altitude: 'Alt. 2,400m',
   address: 'Iten, Elgeyo-Marakwet County, Kenya',
@@ -38,6 +38,7 @@ const BANK = {
 // Statutory rates
 const VAT_RATE = 0.16;
 const TOURISM_LEVY_RATE = 0.02;
+const TAX_DIVISOR = 1 + VAT_RATE + TOURISM_LEVY_RATE;
 
 const TOKENS = {
   ink: '#1c1b17',
@@ -106,30 +107,36 @@ async function buildInvoiceHtml(invoice) {
     ? expenses
     : [{ date: issued_date, description: description || 'Camp expenses', amount: Number(total_expenses) || Number(total_amount) || 0 }];
 
-  // Tax computation 
+  //  Tax computation 
+  // `grandTotal` is the actual amount charged to / owed by the client.
+  // VAT and Tourism Levy are statutory deductions taken OUT of that
+  // added on top of it. So grandTotal never grows because of tax; only
+  // the split between "kept" and "remitted to KRA" changes.
   const hasStoredAmounts = total_amount != null && final_amount != null;
 
-  const subtotal = hasStoredAmounts
-    ? Number(total_amount)
-    : lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const lineItemTotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  const tourismLevy = subtotal * TOURISM_LEVY_RATE;
-  const vatAmount = subtotal * VAT_RATE; 
-  const grandTotal = subtotal + tourismLevy + vatAmount;
+  // subtotal == the tax-inclusive amount actually charged to the client
+  const subtotal = hasStoredAmounts ? Number(final_amount) : lineItemTotal;
+  const grandTotal = subtotal;
 
   if (hasStoredAmounts) {
-    const storedGrandTotal = Number(final_amount);
-    const discrepancy = storedGrandTotal - grandTotal;
+    const discrepancy = Number(total_amount) - lineItemTotal;
     if (Math.abs(discrepancy) > 1) {
       console.error(
-        `[invoice ${invoice_number}] stored final_amount (${storedGrandTotal.toFixed(2)}) ` +
-        `does not match freshly computed total (${grandTotal.toFixed(2)}) — ` +
-        `difference of ${discrepancy.toFixed(2)} KES. Rendering with the computed ` +
-        `value so the PDF stays internally consistent; the stored amounts for this ` +
-        `invoice should be reviewed.`
+        `[invoice ${invoice_number}] stored total_amount (${Number(total_amount).toFixed(2)}) ` +
+        `does not match the sum of line items (${lineItemTotal.toFixed(2)}) — ` +
+        `difference of ${discrepancy.toFixed(2)} KES. Rendering with the stored ` +
+        `final_amount so the PDF stays internally consistent; the stored amounts for ` +
+        `this invoice should be reviewed.`
       );
     }
   }
+
+  // Back the statutory taxes OUT of the tax-inclusive total.
+  const netRetained = grandTotal / TAX_DIVISOR;
+  const vatAmount = netRetained * VAT_RATE;
+  const tourismLevy = netRetained * TOURISM_LEVY_RATE;
 
   const paymentList = Array.isArray(payments) ? payments : [];
   const ledgerEntries = [];
@@ -142,24 +149,6 @@ async function buildInvoiceHtml(invoice) {
       credit: 0,
     });
   });
-
-  if (tourismLevy > 0) {
-    ledgerEntries.push({
-      date: issued_date,
-      description: `Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%)`,
-      debit: tourismLevy,
-      credit: 0,
-    });
-  }
-
-  if (vatAmount > 0) {
-    ledgerEntries.push({
-      date: issued_date,
-      description: `VAT (${(VAT_RATE * 100).toFixed(0)}%)`, 
-      debit: vatAmount,
-      credit: 0,
-    });
-  }
 
   paymentList.forEach(p => {
     const meta = methodMeta(p.method);
@@ -446,7 +435,6 @@ async function buildInvoiceHtml(invoice) {
   <div class="header">
     ${logoBlock}
     <div class="eyebrow">${CAMP.address.split(',')[0]}, Kenya &nbsp;·&nbsp; ${CAMP.altitude}</div>
-    <div class="brand-name">${CAMP.name}</div>
     <div class="brand-sub">${CAMP.tagline}</div>
     <div class="brand-contact">
       <span>${CAMP.address}</span>
@@ -510,16 +498,17 @@ async function buildInvoiceHtml(invoice) {
 
   <div class="tax-summary">
     <div class="tax-summary-box">
-      <div class="tax-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
-      <div class="tax-row"><span>Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%)</span><span>${fmt(tourismLevy)}</span></div>
-      <div class="tax-row vat-row"><span>VAT (${(VAT_RATE * 100).toFixed(0)}%)</span><span>${fmt(vatAmount)}</span></div>
+      <div class="tax-row"><span>Total Charged</span><span>${fmt(grandTotal)}</span></div>
+      <div class="tax-row"><span>Less: VAT (${(VAT_RATE * 100).toFixed(0)}%, inclusive)</span><span>-${fmt(vatAmount)}</span></div>
+      <div class="tax-row vat-row"><span>Less: Tourism Levy (${(TOURISM_LEVY_RATE * 100).toFixed(0)}%, inclusive)</span><span>-${fmt(tourismLevy)}</span></div>
+      <div class="tax-row"><span>Net Amount Retained</span><span>${fmt(netRetained)}</span></div>
       <div class="tax-row total-due-row"><span>Total Due</span><span>${fmt(grandTotal)}</span></div>
       <div class="tax-row"><span>Amount Paid</span><span>${fmt(totalCredit)}</span></div>
       <div class="tax-row balance-row ${balanceDue <= 0 ? 'settled' : 'owing'}">
         <span>${balanceDue <= 0 ? 'Balance Settled' : 'Balance Due'}</span>
         <span>${fmt(balanceDue)}</span>
       </div>
-      <div class="vat-note">VAT &amp; Tourism Levy Registered — KRA PIN: ${CAMP.kraPin}</div>
+      <div class="vat-note">VAT &amp; Tourism Levy are inclusive of the total charged — KRA PIN: ${CAMP.kraPin}</div>
     </div>
   </div>
 
