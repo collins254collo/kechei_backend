@@ -37,7 +37,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // const bcrypt = require('bcrypt');
 // const saltRounds = 10;
-// const password = 'Wamiatu25Collo.';
+// const password = 'Kechei@2026';
 // bcrypt.hash(password, saltRounds, function(err, hash) {
 //   if (err) {
 //     console.error('Error hashing password:', err);
