@@ -23,7 +23,7 @@ const CAMP = {
   phone: '+254 716 888 123',
   email: process.env.RESEND_EMAIL || 'hello@kechei.com',
   website: 'www.kechei.com',
-  kraPin: process.env.CAMP_KRA_PIN || 'P0XXXXXXXXX',
+  kraPin: process.env.CAMP_KRA_PIN || 'P052175167F',
 };
 
 const BANK = {
