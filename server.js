@@ -9,7 +9,7 @@ app.use(express.json());
 
 // CORS configuration
 app.use(cors({
-  origin:  process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: 'http://localhost:3000',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -37,7 +37,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // const bcrypt = require('bcrypt');
 // const saltRounds = 10;
-// const password = 'Kechei@2026';
+// const password = 'Wamiatu25Collo.';
 // bcrypt.hash(password, saltRounds, function(err, hash) {
 //   if (err) {
 //     console.error('Error hashing password:', err);
