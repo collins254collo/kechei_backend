@@ -46,7 +46,7 @@ const TAX_DIVISOR = 1 + VAT_RATE + TOURISM_LEVY_RATE;
 const CURRENCY_META = {
   KES: { label: 'KES', locale: 'en-KE' },
   USD: { label: 'USD', locale: 'en-US' },
-  EUR: { label: 'EUR', locale: 'de-DE' },
+  EUR: { label: 'EUR', locale: 'en-IE' }, 
 };
 const DEFAULT_CURRENCY = 'KES';
 
@@ -83,11 +83,13 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Now currency-aware: pass the invoice's currency code so the right
-// label/locale is used. Falls back to KES if an unrecognized code sneaks in.
 function fmt(n, currency = DEFAULT_CURRENCY) {
   const meta = CURRENCY_META[currency] || CURRENCY_META[DEFAULT_CURRENCY];
-  return `${meta.label} ${Number(n || 0).toLocaleString(meta.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatted = Number(n || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${meta.label} ${formatted}`;
 }
 
 function fmtDate(d) {
