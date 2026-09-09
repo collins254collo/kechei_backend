@@ -34,10 +34,21 @@ const BANK = {
   swiftCode: 'KCBLKENX',
 };
 
-// Statutory Rates (Kenya Tax Laws)
+// Statutory Rates (Kenya Tax Laws) — applied to the invoice's grand total
+// regardless of currency. NOTE: if KRA VAT/levy must be remitted in KES,
+// this breakdown may need a KES-equivalent conversion for non-KES invoices —
+// left as-is for now, flagging for your confirmation.
 const VAT_RATE = 0.16;
 const TOURISM_LEVY_RATE = 0.02;
 const TAX_DIVISOR = 1 + VAT_RATE + TOURISM_LEVY_RATE;
+
+// Currency display config — label prefix + locale used for number formatting
+const CURRENCY_META = {
+  KES: { label: 'KES', locale: 'en-KE' },
+  USD: { label: 'USD', locale: 'en-US' },
+  EUR: { label: 'EUR', locale: 'de-DE' },
+};
+const DEFAULT_CURRENCY = 'KES';
 
 // Design Tokens
 const TOKENS = {
@@ -72,8 +83,11 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-function fmt(n) {
-  return `KES ${Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Now currency-aware: pass the invoice's currency code so the right
+// label/locale is used. Falls back to KES if an unrecognized code sneaks in.
+function fmt(n, currency = DEFAULT_CURRENCY) {
+  const meta = CURRENCY_META[currency] || CURRENCY_META[DEFAULT_CURRENCY];
+  return `${meta.label} ${Number(n || 0).toLocaleString(meta.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtDate(d) {
@@ -101,6 +115,9 @@ async function buildInvoiceHtml(invoice) {
     expenses,
     payments,
   } = invoice;
+
+  const currency = CURRENCY_META[invoice.currency] ? invoice.currency : DEFAULT_CURRENCY;
+  const isKes = currency === 'KES';
 
   const statusMeta = {
     paid: { label: 'Paid', bg: '#eaf1ec', text: TOKENS.forest, border: '#c9dccf' },
@@ -131,27 +148,33 @@ async function buildInvoiceHtml(invoice) {
   const effectivePaid = paid_amount != null ? Number(paid_amount) : totalPaidCalculated;
   const balanceDue = Math.max(0, grandTotal - effectivePaid);
 
-  // Generate Payment QR Code safely
-  const qrData = JSON.stringify({
-    bank: BANK.bankName,
-    account: BANK.accountNumber,
-    name: BANK.accountName,
-    ref: invoice_number,
-    amount: balanceDue > 0 ? balanceDue : grandTotal,
-  });
-
+  // QR / bank transfer block only makes sense for KES — the KCB account
+  // is KES-denominated, so a USD/EUR invoice showing a "scan to pay this
+  // amount" QR against a KES account would be actively misleading.
+  // For non-KES invoices we show the bank details (for wire transfer, which
+  // banks can convert) but drop the QR and don't claim a fixed amount in
+  // a currency the account doesn't hold.
   let qrCodeUrl = '';
-  try {
-    qrCodeUrl = await QRCode.toDataURL(qrData, { width: 240, margin: 1, color: { dark: TOKENS.ink, light: TOKENS.paper } });
-  } catch (err) {
-    console.error('QR generation failed:', err.message);
+  if (isKes) {
+    const qrData = JSON.stringify({
+      bank: BANK.bankName,
+      account: BANK.accountNumber,
+      name: BANK.accountName,
+      ref: invoice_number,
+      amount: balanceDue > 0 ? balanceDue : grandTotal,
+    });
+    try {
+      qrCodeUrl = await QRCode.toDataURL(qrData, { width: 240, margin: 1, color: { dark: TOKENS.ink, light: TOKENS.paper } });
+    } catch (err) {
+      console.error('QR generation failed:', err.message);
+    }
   }
 
   const lineItemRows = lineItems.map(item => `
     <tr>
       <td>${fmtDate(item.date || item.expense_date || issued_date)}</td>
       <td>${escapeHtml(item.description || item.notes || item.category || 'Service / Expense')}</td>
-      <td class="amt">${fmt(item.amount)}</td>
+      <td class="amt">${fmt(item.amount, currency)}</td>
     </tr>
   `).join('');
 
@@ -166,7 +189,7 @@ async function buildInvoiceHtml(invoice) {
             ${escapeHtml(meta.label)}
           </span>
         </td>
-        <td class="amt credit-cell">${fmt(p.amount_paid)}</td>
+        <td class="amt credit-cell">${fmt(p.amount_paid, currency)}</td>
       </tr>
     `;
   }).join('');
@@ -276,6 +299,7 @@ async function buildInvoiceHtml(invoice) {
       .qr-code-image { width: 140px; height: 140px; object-fit: contain; margin-bottom: 8px; }
       .qr-code-label { font-size: 10px; color: ${TOKENS.inkFaint}; letter-spacing: 0.06em; text-transform: uppercase; }
       .qr-code-amount { font-size: 15px; font-weight: 700; color: ${TOKENS.gold}; margin-top: 2px; }
+      .fx-note { font-size: 11px; color: ${TOKENS.inkFaint}; margin-top: 10px; line-height: 1.4; }
 
       .notes { margin-bottom: 24px; padding: 14px 16px; background: ${TOKENS.paperSoft}; border-radius: 6px; font-size: 12.5px; color: ${TOKENS.inkSoft}; line-height: 1.5; }
       .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
@@ -334,7 +358,7 @@ async function buildInvoiceHtml(invoice) {
           <tr>
             <th style="width:20%">Date</th>
             <th style="width:55%">Service / Item Description</th>
-            <th style="width:25%" class="amt">Amount (KES)</th>
+            <th style="width:25%" class="amt">Amount (${escapeHtml(currency)})</th>
           </tr>
         </thead>
         <tbody>
@@ -361,28 +385,28 @@ async function buildInvoiceHtml(invoice) {
         <div class="tax-summary-box">
           <div class="tax-row">
             <span>Nett Vatable Subtotal</span>
-            <span>${fmt(preTaxBase)}</span>
+            <span>${fmt(preTaxBase, currency)}</span>
           </div>
           <div class="tax-row">
             <span>VAT (16%)</span>
-            <span>${fmt(vatAmount)}</span>
+            <span>${fmt(vatAmount, currency)}</span>
           </div>
           <div class="tax-row vat-row">
             <span>Tourism Levy (2%)</span>
-            <span>${fmt(tourismLevy)}</span>
+            <span>${fmt(tourismLevy, currency)}</span>
           </div>
           
           <div class="tax-row grand-total-row">
             <span>Total Charged (Tax Inclusive)</span>
-            <span>${fmt(grandTotal)}</span>
+            <span>${fmt(grandTotal, currency)}</span>
           </div>
           <div class="tax-row">
             <span>Amount Paid</span>
-            <span>${fmt(effectivePaid)}</span>
+            <span>${fmt(effectivePaid, currency)}</span>
           </div>
           <div class="tax-row balance-row ${balanceDue <= 0 ? 'settled' : 'owing'}">
             <span>${balanceDue <= 0 ? 'Balance Settled' : 'Balance Due'}</span>
-            <span>${fmt(balanceDue)}</span>
+            <span>${fmt(balanceDue, currency)}</span>
           </div>
 
           <div class="vat-note">
@@ -401,12 +425,13 @@ async function buildInvoiceHtml(invoice) {
             <div class="bank-detail-row"><span class="bank-detail-label">Branch</span><span class="bank-detail-value">${escapeHtml(BANK.branch)}</span></div>
             <div class="bank-detail-row"><span class="bank-detail-label">Swift Code</span><span class="bank-detail-value">${escapeHtml(BANK.swiftCode)}</span></div>
             <div class="bank-detail-row"><span class="bank-detail-label">Payment Reference</span><span class="bank-detail-value">${escapeHtml(invoice_number)}</span></div>
+            ${!isKes ? `<div class="fx-note">This invoice is denominated in ${escapeHtml(currency)}. International wire transfers are converted to KES on receipt by the bank — the amount credited may vary slightly with exchange rates.</div>` : ''}
           </div>
           ${qrCodeUrl ? `
             <div class="qr-code-column">
               <img src="${qrCodeUrl}" alt="Payment QR Code" class="qr-code-image" />
               <div class="qr-code-label">Scan to Pay</div>
-              <div class="qr-code-amount">${fmt(balanceDue > 0 ? balanceDue : grandTotal)}</div>
+              <div class="qr-code-amount">${fmt(balanceDue > 0 ? balanceDue : grandTotal, currency)}</div>
             </div>
           ` : ''}
         </div>
