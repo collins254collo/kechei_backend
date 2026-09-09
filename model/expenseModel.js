@@ -23,34 +23,70 @@ const ExpenseModel = {
 
   async getTotalByVisit(visit_id) {
     const { rows } = await db.query(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE visit_id = $1`,
+      `SELECT currency, COALESCE(SUM(amount), 0) AS total
+       FROM expenses
+       WHERE visit_id = $1
+       GROUP BY currency`,
       [visit_id]
     );
-    return parseFloat(rows[0].total);
+    return rows.map(r => ({ currency: r.currency, total: parseFloat(r.total) }));
   },
 
-  // only expenses for this visit not yet attached to an invoice
+  // only expenses for this visit not yet attached to an invoice, grouped by currency
   async getUnbilledByVisit(visit_id) {
     const { rows } = await db.query(
-      `SELECT COALESCE(SUM(amount), 0) AS total
+      `SELECT currency, COALESCE(SUM(amount), 0) AS total
        FROM expenses
-       WHERE visit_id = $1 AND invoice_id IS NULL`,
+       WHERE visit_id = $1 AND invoice_id IS NULL
+       GROUP BY currency`,
       [visit_id]
     );
-    return parseFloat(rows[0].total);
+    return rows.map(r => ({ currency: r.currency, total: parseFloat(r.total) }));
   },
 
-  //  unbilled expenses across every visit belonging to this client
+  //  unbilled expenses across every visit belonging to this client, grouped by currency
   async getUnbilledByClient(client_id) {
     const { rows } = await db.query(
-      `SELECT COALESCE(SUM(e.amount), 0) AS total
+      `SELECT e.currency, COALESCE(SUM(e.amount), 0) AS total
        FROM expenses e
        JOIN visits v ON v.id = e.visit_id
-       WHERE v.client_id = $1 AND e.invoice_id IS NULL`,
+       WHERE v.client_id = $1 AND e.invoice_id IS NULL
+       GROUP BY e.currency`,
       [client_id]
     );
-    return parseFloat(rows[0].total);
+    return rows.map(r => ({ currency: r.currency, total: parseFloat(r.total) }));
   },
+
+  async getUnbilledByVisitForUpdate(dbClient, visit_id) {
+  const { rows } = await dbClient.query(
+    `SELECT id, amount, currency
+       FROM expenses
+      WHERE visit_id = $1 AND invoice_id IS NULL
+      FOR UPDATE`,
+    [visit_id]
+  );
+  return rows;
+},
+
+async getUnbilledByClientForUpdate(dbClient, client_id) {
+  const { rows } = await dbClient.query(
+    `SELECT e.id, e.amount, e.currency
+       FROM expenses e
+       JOIN visits v ON v.id = e.visit_id
+      WHERE v.client_id = $1 AND e.invoice_id IS NULL
+      FOR UPDATE OF e`,
+    [client_id]
+  );
+  return rows;
+},
+
+// Generic version used by generateFromVisit/Client/Group — stamps invoice_id
+async markInvoiced(dbClient, ids, invoice_id) {
+  await dbClient.query(
+    `UPDATE expenses SET invoice_id = $1 WHERE id = ANY($2::int[])`,
+    [invoice_id, ids]
+  );
+},
 
   //  stamp invoice_id on all unbilled expenses for a visit. Runs inside a transaction,
   async markInvoicedByVisit(dbClient, visit_id, invoice_id) {
@@ -71,20 +107,20 @@ const ExpenseModel = {
     );
   },
 
-  async create({ visit_id, category, amount, expense_date, description }) {
+  async create({ visit_id, category, amount, currency, expense_date, description }) {
     const { rows } = await db.query(
-      `INSERT INTO expenses (visit_id, category, amount, expense_date, notes)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [visit_id, category, amount, expense_date, description]
+      `INSERT INTO expenses (visit_id, category, amount, currency, expense_date, notes)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [visit_id, category, amount, currency || 'KES', expense_date, description]
     );
     return rows[0];
   },
 
-  async update(id, { category, amount, expense_date, description }) {
+  async update(id, { category, amount, currency, expense_date, description }) {
     const { rows } = await db.query(
-      `UPDATE expenses SET category=$1, amount=$2, expense_date=$3, notes=$4
-       WHERE id=$5 RETURNING *`,
-      [category, amount, expense_date, description, id]
+      `UPDATE expenses SET category=$1, amount=$2, currency=$3, expense_date=$4, notes=$5
+       WHERE id=$6 RETURNING *`,
+      [category, amount, currency || 'KES', expense_date, description, id]
     );
     return rows[0];
   },
@@ -106,7 +142,7 @@ const ExpenseModel = {
 
   async getUnbilledByGroupForUpdate(dbClient, group_id) {
   const { rows } = await dbClient.query(
-    `SELECT e.id, e.amount
+    `SELECT e.id, e.amount, e.currency
        FROM expenses e
        JOIN visits v ON v.id = e.visit_id
       WHERE v.group_id = $1 AND e.invoice_id IS NULL

@@ -18,6 +18,7 @@ const InvoiceModel = {
          i.total_amount,
          i.final_amount,
          i.paid_amount,
+         i.currency,
          i.description,
          i.status,
          i.issued_date,
@@ -77,7 +78,7 @@ const InvoiceModel = {
   },
 
   // on a separate pool connection.
-    async create({ client_id, visit_id, group_id, total_services = 0, total_expenses = 0, total_amount, final_amount, description, issued_date, due_date,   notes }, queryable = db) {
+    async create({ client_id, visit_id, group_id, total_services = 0, total_expenses = 0, total_amount, final_amount, currency, description, issued_date, due_date,   notes }, queryable = db) {
       const invoice_number = await this.generateNumber(queryable);
 
       const subtotal = total_amount ?? (Number(total_services) + Number(total_expenses));
@@ -87,23 +88,24 @@ const InvoiceModel = {
       const { rows } = await queryable.query(
         `INSERT INTO invoices
           (invoice_number, client_id, visit_id, group_id, total_services, total_expenses,
-            total_amount, final_amount, description, status, issued_date, due_date, notes)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'unpaid',$10,$11,$12)
+            total_amount, final_amount, currency, description, status, issued_date, due_date, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'unpaid',$11,$12,$13)
         RETURNING *`,
-        [
-          invoice_number,
-          client_id   ?? null,
-          visit_id    ?? null,
-          group_id    ?? null,
-          total_services,
-          total_expenses,
-          subtotal,
-          final_amount ?? computedFinal,
-          description  ?? null,
-          issued_date   || new Date().toISOString().split('T')[0],
-          due_date      || null,
-          notes         || null,
-        ]
+          [
+            invoice_number,
+            client_id   ?? null,
+            visit_id    ?? null,
+            group_id    ?? null,
+            total_services,
+            total_expenses,
+            subtotal,
+            final_amount ?? computedFinal,
+            currency      || 'KES',
+            description  ?? null,
+            issued_date   || new Date().toISOString().split('T')[0],
+            due_date      || null,
+            notes         || null,
+         ]
       );
       return rows[0];
     },
