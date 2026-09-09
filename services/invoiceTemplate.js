@@ -26,10 +26,6 @@ const CAMP = {
   kraPin: process.env.CAMP_KRA_PIN || 'P052175167F',
 };
 
-// One settlement account per currency — each invoice now shows the account
-// that actually holds funds in its own currency, so QR/wire details are
-// always accurate and never need an FX-conversion disclaimer.
-// TODO: replace the USD/EUR placeholders below with the real account details.
 const BANK_BY_CURRENCY = {
   KES: {
     bankName: 'Kenya Commercial Bank (KCB)',
@@ -58,19 +54,15 @@ function bankForCurrency(currency) {
   return BANK_BY_CURRENCY[currency] || BANK_BY_CURRENCY[DEFAULT_CURRENCY];
 }
 
-// Statutory Rates (Kenya Tax Laws) — applied to the invoice's grand total
-// regardless of currency. NOTE: if KRA VAT/levy must be remitted in KES,
-// this breakdown may need a KES-equivalent conversion for non-KES invoices —
-// left as-is for now, flagging for your confirmation.
 const VAT_RATE = 0.16;
 const TOURISM_LEVY_RATE = 0.02;
 const TAX_DIVISOR = 1 + VAT_RATE + TOURISM_LEVY_RATE;
 
 // Currency display config — label prefix used for number formatting
 const CURRENCY_META = {
-  KES: { label: 'KES' },
-  USD: { label: 'USD' },
-  EUR: { label: 'EUR' },
+  KES: { label: 'KES', locale: 'en-KE' },
+  USD: { label: 'USD', locale: 'en-US' },
+  EUR: { label: 'EUR', locale: 'en-IE' }, 
 };
 const DEFAULT_CURRENCY = 'KES';
 
@@ -107,9 +99,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Fixed en-US-style separators (period decimal, comma thousands) regardless
-// of currency, so formatting never depends on a locale table drifting out
-// of sync with what you actually want displayed.
 function fmt(n, currency = DEFAULT_CURRENCY) {
   const meta = CURRENCY_META[currency] || CURRENCY_META[DEFAULT_CURRENCY];
   const formatted = Number(n || 0).toLocaleString('en-US', {
