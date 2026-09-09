@@ -442,7 +442,7 @@ async function buildInvoiceHtml(invoice) {
       ${notes ? `<div class="notes"><strong>Notes:</strong><br/>${escapeHtml(notes)}</div>` : ''}
 
       <div class="footer">
-        <div class="footer-thanks">Asante — Thank you for training with Kechei</div>
+        <div class="footer-thanks">Asante — Thank you for visiting with Kechei</div>
         <div class="footer-sub">${escapeHtml(CAMP.website)}</div>
       </div>
 
