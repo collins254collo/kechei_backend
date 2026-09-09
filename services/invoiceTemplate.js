@@ -26,13 +26,37 @@ const CAMP = {
   kraPin: process.env.CAMP_KRA_PIN || 'P052175167F',
 };
 
-const BANK = {
-  bankName: 'Kenya Commercial Bank (KCB)',
-  accountName: "Kechei's Group",
-  accountNumber: '1337075159',
-  branch: 'Iten Branch',
-  swiftCode: 'KCBLKENX',
+// One settlement account per currency — each invoice now shows the account
+// that actually holds funds in its own currency, so QR/wire details are
+// always accurate and never need an FX-conversion disclaimer.
+// TODO: replace the USD/EUR placeholders below with the real account details.
+const BANK_BY_CURRENCY = {
+  KES: {
+    bankName: 'Kenya Commercial Bank (KCB)',
+    accountName: "Kechei's Group",
+    accountNumber: '1337075310',
+    branch: 'Iten Branch',
+    swiftCode: 'KCBLKENX',
+  },
+  USD: {
+    bankName: 'Kenya Commercial Bank (KCB)',
+    accountName: "Kechei's Group",
+    accountNumber: '1337075248',
+    branch: 'Iten Branch',
+    swiftCode: 'KCBLKENX',
+  },
+  EUR:{
+    bankName: 'Kenya Commercial Bank (KCB)',
+    accountName: "Kechei's Group",
+    accountNumber: '1337075159',
+    branch: 'Iten Branch',
+    swiftCode: 'KCBLKENX',
+  },
 };
+
+function bankForCurrency(currency) {
+  return BANK_BY_CURRENCY[currency] || BANK_BY_CURRENCY[DEFAULT_CURRENCY];
+}
 
 // Statutory Rates (Kenya Tax Laws) — applied to the invoice's grand total
 // regardless of currency. NOTE: if KRA VAT/levy must be remitted in KES,
@@ -42,11 +66,11 @@ const VAT_RATE = 0.16;
 const TOURISM_LEVY_RATE = 0.02;
 const TAX_DIVISOR = 1 + VAT_RATE + TOURISM_LEVY_RATE;
 
-// Currency display config — label prefix + locale used for number formatting
+// Currency display config — label prefix used for number formatting
 const CURRENCY_META = {
-  KES: { label: 'KES', locale: 'en-KE' },
-  USD: { label: 'USD', locale: 'en-US' },
-  EUR: { label: 'EUR', locale: 'en-IE' }, 
+  KES: { label: 'KES' },
+  USD: { label: 'USD' },
+  EUR: { label: 'EUR' },
 };
 const DEFAULT_CURRENCY = 'KES';
 
@@ -83,6 +107,9 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// Fixed en-US-style separators (period decimal, comma thousands) regardless
+// of currency, so formatting never depends on a locale table drifting out
+// of sync with what you actually want displayed.
 function fmt(n, currency = DEFAULT_CURRENCY) {
   const meta = CURRENCY_META[currency] || CURRENCY_META[DEFAULT_CURRENCY];
   const formatted = Number(n || 0).toLocaleString('en-US', {
@@ -119,7 +146,7 @@ async function buildInvoiceHtml(invoice) {
   } = invoice;
 
   const currency = CURRENCY_META[invoice.currency] ? invoice.currency : DEFAULT_CURRENCY;
-  const isKes = currency === 'KES';
+  const bank = bankForCurrency(currency);
 
   const statusMeta = {
     paid: { label: 'Paid', bg: '#eaf1ec', text: TOKENS.forest, border: '#c9dccf' },
@@ -150,26 +177,22 @@ async function buildInvoiceHtml(invoice) {
   const effectivePaid = paid_amount != null ? Number(paid_amount) : totalPaidCalculated;
   const balanceDue = Math.max(0, grandTotal - effectivePaid);
 
-  // QR / bank transfer block only makes sense for KES — the KCB account
-  // is KES-denominated, so a USD/EUR invoice showing a "scan to pay this
-  // amount" QR against a KES account would be actively misleading.
-  // For non-KES invoices we show the bank details (for wire transfer, which
-  // banks can convert) but drop the QR and don't claim a fixed amount in
-  // a currency the account doesn't hold.
+  // Every currency now has a real settlement account, so the QR/pay-to
+  // details always match the invoice's own currency — no more hiding the
+  // QR or adding an FX-conversion disclaimer for non-KES invoices.
   let qrCodeUrl = '';
-  if (isKes) {
-    const qrData = JSON.stringify({
-      bank: BANK.bankName,
-      account: BANK.accountNumber,
-      name: BANK.accountName,
-      ref: invoice_number,
-      amount: balanceDue > 0 ? balanceDue : grandTotal,
-    });
-    try {
-      qrCodeUrl = await QRCode.toDataURL(qrData, { width: 240, margin: 1, color: { dark: TOKENS.ink, light: TOKENS.paper } });
-    } catch (err) {
-      console.error('QR generation failed:', err.message);
-    }
+  const qrData = JSON.stringify({
+    bank: bank.bankName,
+    account: bank.accountNumber,
+    name: bank.accountName,
+    ref: invoice_number,
+    amount: balanceDue > 0 ? balanceDue : grandTotal,
+    currency,
+  });
+  try {
+    qrCodeUrl = await QRCode.toDataURL(qrData, { width: 240, margin: 1, color: { dark: TOKENS.ink, light: TOKENS.paper } });
+  } catch (err) {
+    console.error('QR generation failed:', err.message);
   }
 
   const lineItemRows = lineItems.map(item => `
@@ -301,7 +324,6 @@ async function buildInvoiceHtml(invoice) {
       .qr-code-image { width: 140px; height: 140px; object-fit: contain; margin-bottom: 8px; }
       .qr-code-label { font-size: 10px; color: ${TOKENS.inkFaint}; letter-spacing: 0.06em; text-transform: uppercase; }
       .qr-code-amount { font-size: 15px; font-weight: 700; color: ${TOKENS.gold}; margin-top: 2px; }
-      .fx-note { font-size: 11px; color: ${TOKENS.inkFaint}; margin-top: 10px; line-height: 1.4; }
 
       .notes { margin-bottom: 24px; padding: 14px 16px; background: ${TOKENS.paperSoft}; border-radius: 6px; font-size: 12.5px; color: ${TOKENS.inkSoft}; line-height: 1.5; }
       .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid ${TOKENS.rule}; text-align: center; }
@@ -420,14 +442,13 @@ async function buildInvoiceHtml(invoice) {
       <div class="payment-wrapper">
         <div class="payment-section">
           <div class="bank-details-column">
-            <div class="payment-title">Bank Transfer Details</div>
-            <div class="bank-detail-row"><span class="bank-detail-label">Bank Name</span><span class="bank-detail-value">${escapeHtml(BANK.bankName)}</span></div>
-            <div class="bank-detail-row"><span class="bank-detail-label">Account Name</span><span class="bank-detail-value">${escapeHtml(BANK.accountName)}</span></div>
-            <div class="bank-detail-row"><span class="bank-detail-label">Account Number</span><span class="bank-detail-value">${escapeHtml(BANK.accountNumber)}</span></div>
-            <div class="bank-detail-row"><span class="bank-detail-label">Branch</span><span class="bank-detail-value">${escapeHtml(BANK.branch)}</span></div>
-            <div class="bank-detail-row"><span class="bank-detail-label">Swift Code</span><span class="bank-detail-value">${escapeHtml(BANK.swiftCode)}</span></div>
+            <div class="payment-title">Bank Transfer Details (${escapeHtml(currency)})</div>
+            <div class="bank-detail-row"><span class="bank-detail-label">Bank Name</span><span class="bank-detail-value">${escapeHtml(bank.bankName)}</span></div>
+            <div class="bank-detail-row"><span class="bank-detail-label">Account Name</span><span class="bank-detail-value">${escapeHtml(bank.accountName)}</span></div>
+            <div class="bank-detail-row"><span class="bank-detail-label">Account Number</span><span class="bank-detail-value">${escapeHtml(bank.accountNumber)}</span></div>
+            <div class="bank-detail-row"><span class="bank-detail-label">Branch</span><span class="bank-detail-value">${escapeHtml(bank.branch)}</span></div>
+            <div class="bank-detail-row"><span class="bank-detail-label">Swift Code</span><span class="bank-detail-value">${escapeHtml(bank.swiftCode)}</span></div>
             <div class="bank-detail-row"><span class="bank-detail-label">Payment Reference</span><span class="bank-detail-value">${escapeHtml(invoice_number)}</span></div>
-            ${!isKes ? `<div class="fx-note">This invoice is denominated in ${escapeHtml(currency)}. International wire transfers are converted to KES on receipt by the bank — the amount credited may vary slightly with exchange rates.</div>` : ''}
           </div>
           ${qrCodeUrl ? `
             <div class="qr-code-column">
@@ -442,7 +463,7 @@ async function buildInvoiceHtml(invoice) {
       ${notes ? `<div class="notes"><strong>Notes:</strong><br/>${escapeHtml(notes)}</div>` : ''}
 
       <div class="footer">
-        <div class="footer-thanks">Asante — Thank you for visiting with Kechei</div>
+        <div class="footer-thanks">Asante - Thank you for training with Kechei</div>
         <div class="footer-sub">${escapeHtml(CAMP.website)}</div>
       </div>
 
